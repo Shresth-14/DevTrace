@@ -88,7 +88,7 @@ describe("InvestigatePanel", () => {
         {
           investigation: base({
             status: "partial",
-            error: "Decision analysis failed: OpenRouter's daily limit for free models is used up.",
+            error: "Decision analysis failed: Model daily limit reached.",
             result: {
               thread: {
                 kind: "issue", number: 12, title: "Pick a cache", url: "https://github.com/acme/widgets/issues/12", state: "open", itemCount: 1,
@@ -105,7 +105,7 @@ describe("InvestigatePanel", () => {
     render(<InvestigatePanel slug="widgets" repoFullName="acme/widgets" pollMs={5} />);
     submit("#12");
     expect(await screen.findByText("Partly done")).toBeInTheDocument();
-    expect(screen.getByText(/daily limit for free models is used up/)).toBeInTheDocument();
+    expect(screen.getByText(/Model daily limit reached/)).toBeInTheDocument();
     expect(screen.getByText(/Alice asks about Redis\./)).toBeInTheDocument();
     expect(screen.getByText(/Full conversation from GitHub \(1 message\)/)).toBeInTheDocument();
   });

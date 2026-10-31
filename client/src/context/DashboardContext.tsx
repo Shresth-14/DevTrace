@@ -67,6 +67,9 @@ function Gate({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Module-level cache to reuse already loaded projects across mounts
+let cachedProjects: ProjectDto[] | null = null;
+
 export function DashboardProvider({
   children,
 }: {
@@ -76,8 +79,8 @@ export function DashboardProvider({
   const [auth, setAuth] = useState<Auth>({ status: "loading" });
   const [authAttempt, setAuthAttempt] = useState(0);
 
-  const [projects, setProjects] = useState<ProjectDto[]>([]);
-  const [projectsLoading, setProjectsLoading] = useState(true);
+  const [projects, setProjects] = useState<ProjectDto[]>(() => cachedProjects ?? []);
+  const [projectsLoading, setProjectsLoading] = useState(() => cachedProjects === null);
   const [projectsError, setProjectsError] = useState<string | null>(null);
 
   const [isAddProjectOpen, setIsAddProjectOpen] = useState(false);
@@ -146,22 +149,27 @@ export function DashboardProvider({
   const ready = auth.status === "ready";
   useEffect(() => {
     if (!ready) return;
+    const controller = new AbortController();
     let live = true;
     api
-      .getProjects()
+      .getProjects({ signal: controller.signal })
       .then((res) => {
         if (!live) return;
+        cachedProjects = res.projects;
         setProjects(res.projects);
         setProjectsError(null);
       })
       .catch((err: unknown) => {
-        if (live) setProjectsError(errorMessage(err, "Could not load your projects."));
+        if (!live) return;
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        setProjectsError(errorMessage(err, "Could not load your projects."));
       })
       .finally(() => {
         if (live) setProjectsLoading(false);
       });
     return () => {
       live = false;
+      controller.abort();
     };
   }, [ready, projectsTick]);
 
@@ -171,8 +179,46 @@ export function DashboardProvider({
   );
   useEffect(() => {
     if (!busy) return;
-    const t = setInterval(() => setProjectsTick((n) => n + 1), 5000);
-    return () => clearInterval(t);
+
+    let timer: NodeJS.Timeout | null = null;
+
+    const startPolling = () => {
+      if (timer === null && typeof document !== "undefined" && document.visibilityState !== "hidden") {
+        timer = setInterval(() => setProjectsTick((n) => n + 1), 5000);
+      }
+    };
+
+    const stopPolling = () => {
+      if (timer !== null) {
+        clearInterval(timer);
+        timer = null;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (typeof document === "undefined") return;
+      if (document.visibilityState === "hidden") {
+        stopPolling();
+      } else {
+        setProjectsTick((n) => n + 1);
+        startPolling();
+      }
+    };
+
+    if (typeof document !== "undefined" && document.visibilityState !== "hidden") {
+      startPolling();
+    }
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
+
+    return () => {
+      stopPolling();
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      }
+    };
   }, [busy]);
 
   // --- adding a repository ------------------------------------------------------

@@ -20,21 +20,21 @@ Our goal is to preserve the technical knowledge behind software projects so cont
 
 ## 2. Models Used and Why
 
-### NVIDIA Nemotron 3 Ultra 550B A55B
+### Qwen 2.5 Coder 7B
 
-- **Model ID:** `nvidia/nemotron-3-ultra-550b-a55b:free`
-- **Type:** Open-weight Large Language Model.
-- **Provider:** OpenRouter.
-- **Execution:** Hosted inference API. The model is not downloaded or executed locally by the project.
+- **Model ID:** `qwen2.5-coder:7b`
+- **Type:** Open-weight Large Language Model (Alibaba Cloud / Qwen team, Apache 2.0).
+- **Provider:** Ollama (native local offline inference runtime).
+- **Execution:** 100% local offline execution on Apple Silicon M4 with Metal GPU acceleration. No external or third-party inference APIs are called.
 - **Purpose:** Analysing historical technical conversations and reconstructing decisions, their reasoning, rejected alternatives, and supporting evidence.
 
 **Why We Selected This Model**
 
-DevTrace requires more than conventional text summarisation. It needs to understand complex technical discussions, identify competing proposals, distinguish objections from final decisions, and recover the reasoning behind rejected alternatives.
+DevTrace requires more than conventional text summarisation. It needs to understand complex technical discussions, code architectures, identify competing proposals, distinguish objections from final decisions, and recover the reasoning behind rejected alternatives.
 
-We selected NVIDIA Nemotron 3 Ultra as a candidate because of its reasoning capabilities, large context window, and suitability for complex multi-step analysis.
+We selected Qwen 2.5 Coder because of its state-of-the-art coding and reasoning capabilities, native grammar-constrained JSON execution, and optimal memory footprint (~4.7 GB in Q4_K_M GGUF format) that runs at high token velocity entirely within unified memory on Apple Silicon.
 
-We intend to use it for:
+We use it for:
 
 1. Extracting technical proposals and arguments from historical discussions.
 2. Identifying supporting and opposing viewpoints.
@@ -42,7 +42,7 @@ We intend to use it for:
 4. Extracting the rationale behind technical decisions.
 5. Generating structured decision records with supporting source references.
 
-**Model Usage Transparency:** The model and inference provider documented here reflect the intended integration. The hosted OpenRouter deployment is subject to confirmation of eligibility under the hackathon's open-model execution requirements.
+**Model Usage Transparency:** The model used by DevTrace is a 100% open-weight model under the permissive Apache 2.0 license, running strictly locally on the user's hardware via Ollama.
 
 ## 3. Team Information
 
