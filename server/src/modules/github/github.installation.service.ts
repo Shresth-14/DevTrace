@@ -28,11 +28,10 @@ export class GithubInstallationService {
     }> = [];
 
     try {
-      const response =
-        await octokit.rest.apps.listInstallationsForAuthenticatedUser({
-          per_page: 100,
-        });
-      installationsFromApi = response.data.installations;
+      installationsFromApi = await octokit.paginate(
+        octokit.rest.apps.listInstallationsForAuthenticatedUser,
+        { per_page: 100 }
+      );
     } catch (error) {
       console.warn(
         `[GitHub Installations] Error querying installations for user ${userId}:`,

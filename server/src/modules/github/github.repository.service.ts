@@ -72,13 +72,12 @@ export class GithubRepositoryService {
     for (const inst of targetInstallations) {
       try {
         const instIdNum = parseInt(inst.installationId, 10);
-        const { data } =
-          await octokit.rest.apps.listInstallationReposForAuthenticatedUser({
-            installation_id: instIdNum,
-            per_page: 100,
-          });
+        const repos = await octokit.paginate(
+          octokit.rest.apps.listInstallationReposForAuthenticatedUser,
+          { installation_id: instIdNum, per_page: 100 }
+        );
 
-        for (const repo of data.repositories) {
+        for (const repo of repos) {
           const repoIdStr = repo.id.toString();
           const isPrivate = repo.private;
 
@@ -109,6 +108,8 @@ export class GithubRepositoryService {
             primaryLanguage: repo.language || null,
             isFork: repo.fork,
             isArchived: repo.archived,
+            stars: repo.stargazers_count,
+            forks: repo.forks_count,
             createdAt: repo.created_at || new Date().toISOString(),
             updatedAt: repo.updated_at || new Date().toISOString(),
             installationId: inst.installationId,
@@ -164,13 +165,12 @@ export class GithubRepositoryService {
     for (const inst of userInstallations) {
       try {
         const instIdNum = parseInt(inst.installationId, 10);
-        const { data } =
-          await octokit.rest.apps.listInstallationReposForAuthenticatedUser({
-            installation_id: instIdNum,
-            per_page: 100,
-          });
+        const repos = await octokit.paginate(
+          octokit.rest.apps.listInstallationReposForAuthenticatedUser,
+          { installation_id: instIdNum, per_page: 100 }
+        );
 
-        const match = data.repositories.find(
+        const match = repos.find(
           (r: { id: number | string }) => r.id.toString() === targetRepoId
         );
         if (match) {
@@ -189,6 +189,8 @@ export class GithubRepositoryService {
               primaryLanguage: match.language || null,
               isFork: match.fork,
               isArchived: match.archived,
+              stars: match.stargazers_count,
+              forks: match.forks_count,
               createdAt: match.created_at || new Date().toISOString(),
               updatedAt: match.updated_at || new Date().toISOString(),
               installationId: inst.installationId,
