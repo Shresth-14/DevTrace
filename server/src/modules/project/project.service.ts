@@ -1,0 +1,171 @@
+import { prisma } from "../../database";
+import { githubRepositoryService } from "../github/github.repository.service";
+import { Project } from "@prisma/client";
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, "")
+    .replace(/[\s_-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export class ProjectService {
+  /**
+   * Generates a unique URL slug for the project.
+   */
+  private async generateUniqueSlug(
+    name: string,
+    owner: string
+  ): Promise<string> {
+    const baseSlug = slugify(name);
+    const existingBase = await prisma.project.findUnique({
+      where: { slug: baseSlug },
+    });
+
+    if (!existingBase) {
+      return baseSlug;
+    }
+
+    // Try owner-name
+    const ownerSlug = slugify(`${owner}-${name}`);
+    const existingOwner = await prisma.project.findUnique({
+      where: { slug: ownerSlug },
+    });
+
+    if (!existingOwner) {
+      return ownerSlug;
+    }
+
+    // Append counter
+    let counter = 1;
+    while (counter < 100) {
+      const candidate = `${ownerSlug}-${counter}`;
+      const existing = await prisma.project.findUnique({
+        where: { slug: candidate },
+      });
+      if (!existing) {
+        return candidate;
+      }
+      counter++;
+    }
+
+    return `${ownerSlug}-${Date.now().toString(36)}`;
+  }
+
+  /**
+   * Connects a repository and creates or updates a Dev Trace Project.
+   */
+  public async connectRepository(
+    userId: string,
+    repositoryId: string | number
+  ): Promise<Project> {
+    // 1. Verify access & fetch metadata
+    const { repository, installationRecordId } =
+      await githubRepositoryService.getRepositoryDetails(userId, repositoryId);
+
+    const repoBigInt = BigInt(repository.id);
+
+    // 2. Check if this repository is already connected for this user
+    const existing = await prisma.project.findUnique({
+      where: {
+        userId_githubRepoId: {
+          userId,
+          githubRepoId: repoBigInt,
+        },
+      },
+    });
+
+    if (existing) {
+      // Update with latest repo metadata
+      return prisma.project.update({
+        where: { id: existing.id },
+        data: {
+          name: repository.name,
+          description: repository.description,
+          githubRepoFullName: repository.fullName,
+          githubRepoName: repository.name,
+          githubRepoOwner: repository.owner,
+          githubRepoUrl: repository.htmlUrl,
+          defaultBranch: repository.defaultBranch,
+          isPrivate: repository.isPrivate,
+          primaryLanguage: repository.primaryLanguage,
+          installationId: installationRecordId || existing.installationId,
+        },
+      });
+    }
+
+    // 3. Generate unique slug
+    const slug = await this.generateUniqueSlug(
+      repository.name,
+      repository.owner
+    );
+
+    // 4. Create Project
+    return prisma.project.create({
+      data: {
+        name: repository.name,
+        slug,
+        description: repository.description,
+        userId,
+        githubRepoId: repoBigInt,
+        githubRepoFullName: repository.fullName,
+        githubRepoName: repository.name,
+        githubRepoOwner: repository.owner,
+        githubRepoUrl: repository.htmlUrl,
+        defaultBranch: repository.defaultBranch,
+        isPrivate: repository.isPrivate,
+        primaryLanguage: repository.primaryLanguage,
+        installationId: installationRecordId,
+      },
+    });
+  }
+
+  /**
+   * Lists all projects owned by the user.
+   */
+  public async listUserProjects(userId: string): Promise<Project[]> {
+    return prisma.project.findMany({
+      where: { userId },
+      orderBy: { updatedAt: "desc" },
+    });
+  }
+
+  /**
+   * Retrieves a project by slug with privacy/authorization checks.
+   */
+  public async getProjectBySlug(
+    slug: string,
+    requestingUserId?: string
+  ): Promise<{ project: Project; isOwner: boolean }> {
+    const project = await prisma.project.findUnique({
+      where: { slug },
+      include: {
+        user: {
+          select: {
+            id: true,
+            name: true,
+            githubUsername: true,
+            githubAvatarUrl: true,
+          },
+        },
+      },
+    });
+
+    if (!project) {
+      throw new Error("Project not found.");
+    }
+
+    const isOwner = requestingUserId === project.userId;
+
+    // Enforce private repository protection
+    if (project.isPrivate && !isOwner) {
+      throw new Error("Unauthorized: Private repository project.");
+    }
+
+    return { project, isOwner };
+  }
+}
+
+export const projectService = new ProjectService();
