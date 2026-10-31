@@ -52,6 +52,20 @@ export class AiService {
   }
 
   /**
+   * Returns true if current active AI provider is configured.
+   */
+  public isConfigured(): boolean {
+    return this.activeProvider.isConfigured();
+  }
+
+  /**
+   * Returns configured model of active provider.
+   */
+  public getModel(): string {
+    return this.activeProvider.getModel();
+  }
+
+  /**
    * Helper to normalize a single text prompt and optional system instruction into ChatMessage array.
    */
   public buildMessages(prompt: string, systemPrompt?: string): ChatMessage[] {
