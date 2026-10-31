@@ -24,3 +24,6 @@ coverage/
 .idea/
 .vscode/
 
+
+# Private keys (never commit)
+*.pem

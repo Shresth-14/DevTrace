@@ -118,8 +118,12 @@ export async function listCandidateThreads(
 }
 
 /** Bots (dependabot, CI, release tools) never make design decisions and waste tokens. */
-const isAutomated = (login: string | null) =>
-  !!login && /\[bot\]$|-bot$/i.test(login);
+export const isAutomated = (login: string | null) =>
+  !!login &&
+  // GitHub's GraphQL reports app accounts without the "[bot]" suffix
+  /\[bot\]$|-bot$|^(vercel|github-actions|netlify|codecov|codecov-commenter|dependabot|renovate|sonarcloud|allcontributors)$/i.test(
+    login
+  );
 
 interface ThreadMeta {
   state: string;

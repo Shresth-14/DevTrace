@@ -1,5 +1,6 @@
 import type { ChatMessage, AiChatOptions } from "../ai/ai.types";
 import { AiTimeoutError, AiUpstreamError } from "../ai/ai.types";
+import { isDailyModelLimit } from "./decision.errors";
 import { REPAIR_PROMPT, SYSTEM_PROMPT, renderThread } from "./decision.prompt";
 import {
   mergeCandidates,
@@ -54,13 +55,15 @@ const defaultSleep = (ms: number) =>
 
 function retryable(err: unknown): boolean {
   if (err instanceof AiTimeoutError) return true;
+  // a daily quota will not clear in a few seconds; retrying only wastes time
+  if (isDailyModelLimit(err)) return false;
   return (
     err instanceof AiUpstreamError &&
     (err.statusCode === 429 || err.statusCode >= 500)
   );
 }
 
-async function callModel(
+export async function callModel(
   llm: LlmClient,
   messages: ChatMessage[],
   opts: ExtractorOptions
