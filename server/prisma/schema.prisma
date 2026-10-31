@@ -9,20 +9,20 @@ datasource db {
 }
 
 model User {
-  id               String               @id @default(cuid())
-  email            String?              @unique
+  id               String   @id @default(cuid())
+  email            String?  @unique
   name             String?
-  githubId         BigInt               @unique
+  githubId         BigInt   @unique
   githubUsername   String
   githubAvatarUrl  String?
   githubProfileUrl String?
-  githubUserType   String               @default("User")
-  createdAt        DateTime             @default(now())
-  updatedAt        DateTime             @updatedAt
+  githubUserType   String   @default("User")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
-  token            GithubAccountToken?
-  installations    GithubInstallation[]
-  projects         Project[]
+  token         GithubAccountToken?
+  installations GithubInstallation[]
+  projects      Project[]
 
   @@index([githubUsername])
 }
@@ -41,21 +41,21 @@ model GithubAccountToken {
 }
 
 model GithubInstallation {
-  id                  String    @id @default(cuid())
+  id                  String   @id @default(cuid())
   installationId      BigInt
   accountLogin        String
   accountId           BigInt
-  accountType         String    // "User" or "Organization"
+  accountType         String // "User" or "Organization"
   accountAvatarUrl    String?
-  targetType          String?   // "User" or "Organization"
-  repositorySelection String    @default("all") // "all" or "selected"
-  status              String    @default("active") // "active", "suspended", "deleted"
+  targetType          String? // "User" or "Organization"
+  repositorySelection String   @default("all") // "all" or "selected"
+  status              String   @default("active") // "active", "suspended", "deleted"
   userId              String
-  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  projects            Project[]
+  projects Project[]
 
   @@unique([userId, installationId])
   @@index([accountLogin])
@@ -63,31 +63,318 @@ model GithubInstallation {
 }
 
 model Project {
-  id                 String              @id @default(cuid())
-  name               String
-  slug               String              @unique
-  description        String?
-  userId             String
-  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id          String  @id @default(cuid())
+  name        String
+  slug        String  @unique
+  description String?
+  userId      String
+  user        User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   // GitHub repository association
   githubRepoId       BigInt
-  githubRepoFullName String              // "owner/repo"
-  githubRepoName     String              // "repo"
-  githubRepoOwner    String              // "owner"
+  githubRepoFullName String // "owner/repo"
+  githubRepoName     String // "repo"
+  githubRepoOwner    String // "owner"
   githubRepoUrl      String
-  defaultBranch      String              @default("main")
-  isPrivate          Boolean             @default(false)
+  defaultBranch      String  @default("main")
+  isPrivate          Boolean @default(false)
   primaryLanguage    String?
 
-  installationId     String?
-  installation       GithubInstallation? @relation(fields: [installationId], references: [id], onDelete: SetNull)
+  installationId String?
+  installation   GithubInstallation? @relation(fields: [installationId], references: [id], onDelete: SetNull)
 
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
+  // Synchronization state (per-resource checkpoints live in syncCursor)
+  syncStatus   String    @default("never") // never | queued | running | completed | partial | failed
+  lastSyncedAt DateTime?
+  syncCursor   Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  syncJobs           SyncJob[]
+  issues             GithubIssue[]
+  issueComments      GithubIssueComment[]
+  pullRequests       GithubPullRequest[]
+  prComments         GithubPrComment[]
+  prReviews          GithubPrReview[]
+  reviewComments     GithubReviewComment[]
+  prFiles            GithubPrFile[]
+  prCommits          GithubPrCommit[]
+  commits            GithubCommit[]
+  discussions        GithubDiscussion[]
+  discussionComments GithubDiscussionComment[]
+  repoFiles          GithubRepoFile[]
 
   @@unique([userId, githubRepoId])
   @@index([slug])
   @@index([userId])
   @@index([githubRepoFullName])
+}
+
+// ---------------------------------------------------------------------------
+// GitHub ingestion. Raw source content only; AI interpretation lives elsewhere.
+// All rows are keyed by GitHub's stable IDs / numbers so repeated syncs upsert.
+// ---------------------------------------------------------------------------
+
+model SyncJob {
+  id         String    @id @default(cuid())
+  projectId  String
+  project    Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  trigger    String    @default("initial") // initial | manual
+  mode       String    @default("full") // full | incremental
+  status     String    @default("running") // running | completed | partial | failed
+  // { [resource]: { status: "ok" | "error" | "skipped", count: number, error?: string } }
+  resources  Json?
+  error      String?
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+
+  @@index([projectId, startedAt])
+}
+
+model GithubIssue {
+  id          String    @id @default(cuid())
+  projectId   String
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  githubId    BigInt
+  number      Int
+  title       String
+  body        String?
+  authorLogin String?
+  state       String
+  stateReason String?
+  labels      Json
+  assignees   Json
+  url         String
+  createdAtGh DateTime
+  updatedAtGh DateTime
+  closedAtGh  DateTime?
+
+  comments GithubIssueComment[]
+
+  @@unique([projectId, number])
+  @@unique([projectId, githubId])
+  @@index([projectId, updatedAtGh])
+}
+
+model GithubIssueComment {
+  id          String      @id @default(cuid())
+  projectId   String
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  githubId    BigInt
+  issueNumber Int
+  issue       GithubIssue @relation(fields: [projectId, issueNumber], references: [projectId, number], onDelete: Cascade)
+  body        String
+  authorLogin String?
+  url         String
+  createdAtGh DateTime
+  updatedAtGh DateTime
+
+  @@unique([projectId, githubId])
+  @@index([projectId, issueNumber])
+}
+
+model GithubPullRequest {
+  id             String    @id @default(cuid())
+  projectId      String
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  githubId       BigInt
+  number         Int
+  title          String
+  body           String?
+  authorLogin    String?
+  state          String
+  isDraft        Boolean   @default(false)
+  baseRef        String
+  headRef        String
+  baseSha        String
+  headSha        String
+  mergeCommitSha String?
+  labels         Json
+  reviewers      Json
+  url            String
+  createdAtGh    DateTime
+  updatedAtGh    DateTime
+  closedAtGh     DateTime?
+  mergedAtGh     DateTime?
+
+  comments       GithubPrComment[]
+  reviews        GithubPrReview[]
+  reviewComments GithubReviewComment[]
+  files          GithubPrFile[]
+  commits        GithubPrCommit[]
+
+  @@unique([projectId, number])
+  @@unique([projectId, githubId])
+  @@index([projectId, updatedAtGh])
+}
+
+// General PR conversation comments (not inline, not review submissions)
+model GithubPrComment {
+  id          String            @id @default(cuid())
+  projectId   String
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  githubId    BigInt
+  prNumber    Int
+  pullRequest GithubPullRequest @relation(fields: [projectId, prNumber], references: [projectId, number], onDelete: Cascade)
+  body        String
+  authorLogin String?
+  url         String
+  createdAtGh DateTime
+  updatedAtGh DateTime
+
+  @@unique([projectId, githubId])
+  @@index([projectId, prNumber])
+}
+
+// Review submissions (APPROVED / CHANGES_REQUESTED / COMMENTED / DISMISSED)
+model GithubPrReview {
+  id            String            @id @default(cuid())
+  projectId     String
+  project       Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  githubId      BigInt
+  prNumber      Int
+  pullRequest   GithubPullRequest @relation(fields: [projectId, prNumber], references: [projectId, number], onDelete: Cascade)
+  reviewerLogin String?
+  body          String?
+  state         String
+  commitSha     String?
+  url           String
+  submittedAt   DateTime?
+
+  @@unique([projectId, githubId])
+  @@index([projectId, prNumber])
+}
+
+// Inline diff comments, with thread structure from GraphQL reviewThreads
+model GithubReviewComment {
+  id             String            @id @default(cuid())
+  projectId      String
+  project        Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  githubId       BigInt
+  prNumber       Int
+  pullRequest    GithubPullRequest @relation(fields: [projectId, prNumber], references: [projectId, number], onDelete: Cascade)
+  reviewGithubId BigInt?
+  inReplyToId    BigInt?
+  threadId       String?
+  isResolved     Boolean?
+  body           String
+  authorLogin    String?
+  path           String
+  line           Int?
+  originalLine   Int?
+  diffHunk       String?
+  commitSha      String?
+  url            String
+  createdAtGh    DateTime
+  updatedAtGh    DateTime
+
+  @@unique([projectId, githubId])
+  @@index([projectId, prNumber])
+  @@index([projectId, threadId])
+}
+
+model GithubPrFile {
+  id               String            @id @default(cuid())
+  projectId        String
+  project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  prNumber         Int
+  pullRequest      GithubPullRequest @relation(fields: [projectId, prNumber], references: [projectId, number], onDelete: Cascade)
+  filename         String
+  previousFilename String?
+  status           String
+  additions        Int
+  deletions        Int
+  changes          Int
+  blobSha          String?
+  patch            String? // null when GitHub omits it (binary / very large diffs)
+  headSha          String?
+
+  @@unique([projectId, prNumber, filename])
+  @@index([projectId, filename])
+}
+
+model GithubPrCommit {
+  id          String            @id @default(cuid())
+  projectId   String
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  prNumber    Int
+  pullRequest GithubPullRequest @relation(fields: [projectId, prNumber], references: [projectId, number], onDelete: Cascade)
+  sha         String
+
+  @@unique([projectId, prNumber, sha])
+  @@index([projectId, sha])
+}
+
+model GithubCommit {
+  id             String    @id @default(cuid())
+  projectId      String
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sha            String
+  message        String
+  authorName     String?
+  authorEmail    String?
+  authorLogin    String?
+  committerName  String?
+  committerLogin String?
+  authoredAt     DateTime?
+  committedAt    DateTime?
+  url            String
+
+  @@unique([projectId, sha])
+  @@index([projectId, committedAt])
+}
+
+model GithubDiscussion {
+  id                  String   @id @default(cuid())
+  projectId           String
+  project             Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  githubNodeId        String
+  number              Int
+  title               String
+  body                String?
+  category            String?
+  authorLogin         String?
+  isAnswered          Boolean  @default(false)
+  answerCommentNodeId String?
+  url                 String
+  createdAtGh         DateTime
+  updatedAtGh         DateTime
+
+  comments GithubDiscussionComment[]
+
+  @@unique([projectId, number])
+  @@unique([projectId, githubNodeId])
+}
+
+model GithubDiscussionComment {
+  id               String           @id @default(cuid())
+  projectId        String
+  project          Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  githubNodeId     String
+  discussionNumber Int
+  discussion       GithubDiscussion @relation(fields: [projectId, discussionNumber], references: [projectId, number], onDelete: Cascade)
+  parentNodeId     String? // set for nested replies
+  body             String
+  authorLogin      String?
+  isAnswer         Boolean          @default(false)
+  url              String
+  createdAtGh      DateTime
+  updatedAtGh      DateTime
+
+  @@unique([projectId, githubNodeId])
+  @@index([projectId, discussionNumber])
+}
+
+model GithubRepoFile {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  path      String
+  type      String // blob | tree
+  sha       String
+  size      Int?
+  ref       String
+
+  @@unique([projectId, path])
 }

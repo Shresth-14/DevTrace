@@ -1,6 +1,7 @@
 import { prisma } from "../../database";
 import { githubRepositoryService } from "../github/github.repository.service";
 import { Project } from "@prisma/client";
+import { githubSyncService } from "../github/sync/github.sync.service";
 
 function slugify(text: string): string {
   return text
@@ -102,8 +103,8 @@ export class ProjectService {
       repository.owner
     );
 
-    // 4. Create Project
-    return prisma.project.create({
+    // 4. Create Project (initial GitHub import starts in the background)
+    const created = await prisma.project.create({
       data: {
         name: repository.name,
         slug,
@@ -120,6 +121,17 @@ export class ProjectService {
         installationId: installationRecordId,
       },
     });
+
+    githubSyncService
+      .startSync(created.slug, userId, { trigger: "initial" })
+      .catch((err) =>
+        console.warn(
+          "[Project] Initial GitHub sync could not start:",
+          err instanceof Error ? err.message : err
+        )
+      );
+
+    return created;
   }
 
   /**

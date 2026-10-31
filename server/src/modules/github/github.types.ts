@@ -43,6 +43,8 @@ export interface GithubRepositoryDto {
   primaryLanguage: string | null;
   isFork: boolean;
   isArchived: boolean;
+  stars?: number;
+  forks?: number;
   createdAt: string;
   updatedAt: string;
   installationId: string;
