@@ -23,6 +23,7 @@ import {
   type PrBundle,
 } from "./github.bulk";
 import { SyncAccessError, describeError } from "./github.errors";
+import { logRequestSummary, timingEnabled } from "../github.timing";
 import type {
   FetchReason,
   ReferenceRow,
@@ -170,11 +171,17 @@ export async function runSync(input: RunSyncInput): Promise<RunSyncOutput> {
     work: (result: ResourceResult) => Promise<void>
   ) => {
     const result = begin(name);
+    const startedAt = Date.now();
     try {
       await work(result);
     } catch (err) {
       result.status = "error";
       result.error = describeError(err);
+    }
+    if (timingEnabled()) {
+      console.log(
+        `[Sync timing] ${name} ${Date.now() - startedAt}ms (${result.status})`
+      );
     }
     await report();
   };
@@ -878,5 +885,6 @@ export async function runSync(input: RunSyncInput): Promise<RunSyncOutput> {
         ? "failed"
         : "partial";
 
+  logRequestSummary(`${ref.owner}/${ref.repo} sync (${status})`);
   return { status, resources };
 }
