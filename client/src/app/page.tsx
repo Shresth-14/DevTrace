@@ -1,5 +1,6 @@
 "use client";
 
+import { LogoMark } from "@/components/LogoMark";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Navbar } from "@/components/Navbar";
@@ -102,7 +103,7 @@ export default function Home() {
 
             <div className="space-y-2">
               <div className="w-8 h-8 rounded-lg bg-[#41463B] text-white flex items-center justify-center font-bold text-xs">
-                DT
+                <LogoMark />
               </div>
               <h3 className="text-xl font-bold tracking-tight text-[#41463B]">
                 {authModal === "signup"

@@ -1,5 +1,6 @@
 "use client";
 
+import { LogoMark } from "@/components/LogoMark";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 
@@ -12,20 +13,7 @@ export function Footer() {
           <div className="md:col-span-2 space-y-4">
             <Link href="/" className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-[#41463B] text-[#F7F5ED] flex items-center justify-center font-bold text-xs">
-                <svg
-                  className="w-4 h-4 text-[#C5D6B4]"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx="6" cy="6" r="3" />
-                  <circle cx="18" cy="18" r="3" />
-                  <path d="M9 9l6 6" />
-                  <path d="M15 6h3v3" />
-                </svg>
+                <LogoMark />
               </div>
               <span className="font-semibold text-base text-[#41463B]">
                 Dev Trace

@@ -1,5 +1,6 @@
 "use client";
 
+import { LogoMark } from "@/components/LogoMark";
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -119,20 +120,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       <header className="md:hidden bg-[#FAF8F3] border-b border-[#EAE4D5] px-4 py-3 flex items-center justify-between sticky top-0 z-40">
         <Link href="/" className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg bg-[#2D3627] text-[#FAF8F3] flex items-center justify-center font-bold text-xs">
-            <svg
-              className="w-4 h-4 text-[#C5D6B4]"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="6" cy="6" r="3" />
-              <circle cx="18" cy="18" r="3" />
-              <path d="M9 9l6 6" />
-              <path d="M15 6h3v3" />
-            </svg>
+            <LogoMark />
           </div>
           <span className="font-bold text-base tracking-tight text-[#283022]">
             Dev Trace
@@ -229,20 +217,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
               className="flex items-center gap-2.5 group focus:outline-none"
             >
               <div className="w-8 h-8 rounded-xl bg-[#2D3627] text-[#FAF8F3] flex items-center justify-center font-bold text-xs shadow-xs transition-transform group-hover:scale-[1.03]">
-                <svg
-                  className="w-4.5 h-4.5 text-[#C5D6B4]"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <circle cx="6" cy="6" r="3" />
-                  <circle cx="18" cy="18" r="3" />
-                  <path d="M9 9l6 6" />
-                  <path d="M15 6h3v3" />
-                </svg>
+                <LogoMark />
               </div>
               <div className="flex flex-col">
                 <span className="font-bold text-base tracking-tight text-[#283022]">

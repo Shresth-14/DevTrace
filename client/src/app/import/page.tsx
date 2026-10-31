@@ -1,5 +1,6 @@
 "use client";
 
+import { LogoMark } from "@/components/LogoMark";
 import { useEffect, useState, useTransition, Suspense } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -216,7 +217,7 @@ function ImportContent() {
           <div className="max-w-5xl mx-auto flex items-center justify-between">
             <Link href="/" className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-[#283222] text-[#FAF8F3] flex items-center justify-center font-bold text-xs">
-                DT
+                <LogoMark />
               </div>
               <span className="font-semibold text-base text-[#1F271B] tracking-tight">
                 Dev Trace
@@ -316,7 +317,7 @@ function ImportContent() {
           <div className="flex items-center gap-3">
             <Link href="/" className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-xl bg-[#283222] text-[#FAF8F3] flex items-center justify-center font-bold text-xs">
-                DT
+                <LogoMark />
               </div>
               <span className="font-semibold text-base text-[#1F271B] tracking-tight">
                 Dev Trace

@@ -1,5 +1,6 @@
 "use client";
 
+import { LogoMark } from "@/components/LogoMark";
 import {
   Suspense,
   useCallback,
@@ -389,7 +390,7 @@ function ProjectWorkspace() {
               className={`flex shrink-0 items-center gap-2 rounded ${FOCUS}`}
             >
               <span className="flex h-6 w-6 items-center justify-center rounded-md bg-dt-ink-strong text-[10px] font-bold text-dt-bg">
-                DT
+                <LogoMark />
               </span>
               <span className="hidden text-sm font-semibold tracking-tight text-dt-ink-strong sm:inline">
                 Dev Trace
