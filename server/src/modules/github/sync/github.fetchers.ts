@@ -40,19 +40,31 @@ export function numberFromUrl(url: string): number {
   return n;
 }
 
+/** Yields at most `limit` rows in total from a sequence of pages. */
+function takeUpTo<T>(rows: T[], used: { n: number }, limit: number): T[] {
+  const room = Math.max(0, limit - used.n);
+  const take = rows.slice(0, room);
+  used.n += take.length;
+  return take;
+}
+
 // ---------------------------------------------------------------------------
 // Issues (the Issues API also returns PRs; those are filtered out)
 // ---------------------------------------------------------------------------
 export async function* fetchIssues(
   octokit: Octokit,
   ref: RepoRef,
-  since?: string
+  since?: string,
+  limit = Infinity,
+  state: "open" | "all" = "all"
 ): AsyncGenerator<IssueRow[]> {
+  const used = { n: 0 };
+  // Most recently updated first, so a limit keeps the freshest threads.
   const pages = octokit.paginate.iterator(octokit.rest.issues.listForRepo, {
     ...ref,
-    state: "all",
+    state,
     sort: "updated",
-    direction: "asc",
+    direction: "desc",
     since,
     per_page: 100,
   });
@@ -74,41 +86,36 @@ export async function* fetchIssues(
         updatedAtGh: new Date(i.updated_at),
         closedAtGh: date(i.closed_at),
       }));
-    if (rows.length > 0) yield rows;
+    const batch = takeUpTo(rows, used, limit);
+    if (batch.length > 0) yield batch;
+    if (used.n >= limit) return;
   }
 }
 
 /**
- * Repo-wide issue comments. GitHub returns comments on issues AND on pull
- * requests here; the orchestrator classifies them by parent number.
+ * All conversation comments of ONE issue or pull request (GitHub serves PR
+ * conversation comments through the issues API). Fetching per thread keeps the
+ * work proportional to what was imported instead of the whole repository.
  */
-export async function* fetchRepoComments(
+export async function fetchThreadComments(
   octokit: Octokit,
   ref: RepoRef,
-  since?: string
-): AsyncGenerator<CommentRow[]> {
-  const pages = octokit.paginate.iterator(
-    octokit.rest.issues.listCommentsForRepo,
-    {
-      ...ref,
-      sort: "updated",
-      direction: "asc",
-      since,
-      per_page: 100,
-    }
-  );
-  for await (const { data } of pages) {
-    const rows = data.map((c): CommentRow => ({
-      githubId: BigInt(c.id),
-      parentNumber: numberFromUrl(c.issue_url),
-      body: c.body ?? "",
-      authorLogin: login(c.user),
-      url: c.html_url,
-      createdAtGh: new Date(c.created_at),
-      updatedAtGh: new Date(c.updated_at),
-    }));
-    if (rows.length > 0) yield rows;
-  }
+  number: number
+): Promise<CommentRow[]> {
+  const comments = await octokit.paginate(octokit.rest.issues.listComments, {
+    ...ref,
+    issue_number: number,
+    per_page: 100,
+  });
+  return comments.map((c): CommentRow => ({
+    githubId: BigInt(c.id),
+    parentNumber: number,
+    body: c.body ?? "",
+    authorLogin: login(c.user),
+    url: c.html_url,
+    createdAtGh: new Date(c.created_at),
+    updatedAtGh: new Date(c.updated_at),
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -118,12 +125,15 @@ export async function* fetchRepoComments(
 export async function* fetchPullRequests(
   octokit: Octokit,
   ref: RepoRef,
-  since?: string
+  since?: string,
+  limit = Infinity,
+  state: "open" | "all" = "all"
 ): AsyncGenerator<PullRequestRow[]> {
+  const used = { n: 0 };
   const sinceMs = since ? Date.parse(since) : null;
   const pages = octokit.paginate.iterator(octokit.rest.pulls.list, {
     ...ref,
-    state: "all",
+    state,
     sort: "updated",
     direction: "desc",
     per_page: 100,
@@ -154,7 +164,9 @@ export async function* fetchPullRequests(
       closedAtGh: date(p.closed_at),
       mergedAtGh: date(p.merged_at),
     }));
-    if (rows.length > 0) yield rows;
+    const batch = takeUpTo(rows, used, limit);
+    if (batch.length > 0) yield batch;
+    if (used.n >= limit) return;
     if (fresh.length < data.length) return; // reached already-synced PRs
   }
 }
@@ -254,12 +266,17 @@ export async function fetchReviewThreads(
 export async function fetchReviewComments(
   octokit: Octokit,
   ref: RepoRef,
-  prNumber: number,
-  threads: Map<string, ThreadInfo>
+  prNumber: number
 ): Promise<ReviewCommentRow[]> {
   const comments = await octokit.paginate(
     octokit.rest.pulls.listReviewComments,
     { ...ref, pull_number: prNumber, per_page: 100 }
+  );
+  if (comments.length === 0) return [];
+  // Thread structure (resolved flag) is best-effort and only requested when
+  // there is something to attach it to: each GraphQL call is rate-spaced.
+  const threads = await fetchReviewThreads(octokit, ref, prNumber).catch(
+    () => new Map<string, ThreadInfo>()
   );
   return comments.map((c): ReviewCommentRow => {
     const thread = threads.get(String(c.id));
@@ -284,18 +301,26 @@ export async function fetchReviewComments(
   });
 }
 
+const MAX_FILES_PER_PR = 300;
+
 export async function fetchPrFiles(
   octokit: Octokit,
   ref: RepoRef,
   prNumber: number,
   headSha: string | null
 ): Promise<PrFileRow[]> {
-  const files = await octokit.paginate(octokit.rest.pulls.listFiles, {
-    ...ref,
-    pull_number: prNumber,
-    per_page: 100,
-  });
-  return files.map((f): PrFileRow => ({
+  // A single huge PR (thousands of files) must not stall the import.
+  const files: Awaited<
+    ReturnType<typeof octokit.rest.pulls.listFiles>
+  >["data"] = [];
+  for await (const page of octokit.paginate.iterator(
+    octokit.rest.pulls.listFiles,
+    { ...ref, pull_number: prNumber, per_page: 100 }
+  )) {
+    files.push(...page.data);
+    if (files.length >= MAX_FILES_PER_PR) break;
+  }
+  return files.slice(0, MAX_FILES_PER_PR).map((f): PrFileRow => ({
     prNumber,
     filename: f.filename,
     previousFilename: f.previous_filename ?? null,
@@ -354,8 +379,10 @@ export async function* fetchCommits(
   octokit: Octokit,
   ref: RepoRef,
   branch: string,
-  since?: string
+  since?: string,
+  limit = Infinity
 ): AsyncGenerator<CommitRow[]> {
+  const used = { n: 0 };
   const pages = octokit.paginate.iterator(octokit.rest.repos.listCommits, {
     ...ref,
     sha: branch,
@@ -363,7 +390,9 @@ export async function* fetchCommits(
     per_page: 100,
   });
   for await (const { data } of pages) {
-    if (data.length > 0) yield data.map(toCommitRow);
+    const batch = takeUpTo(data.map(toCommitRow), used, limit);
+    if (batch.length > 0) yield batch;
+    if (used.n >= limit) return;
   }
 }
 
@@ -513,8 +542,10 @@ export interface DiscussionBatch {
 export async function* fetchDiscussions(
   octokit: Octokit,
   ref: RepoRef,
-  since?: string
+  since?: string,
+  limit = Infinity
 ): AsyncGenerator<DiscussionBatch> {
+  let seen = 0;
   const sinceMs = since ? Date.parse(since) : null;
   let after: string | null = null;
   const seenCursors = new Set<string>();
@@ -534,6 +565,11 @@ export async function* fetchDiscussions(
         reachedOld = true;
         continue;
       }
+      if (seen >= limit) {
+        reachedOld = true; // limit reached: stop paging after this batch
+        break;
+      }
+      seen += 1;
       batch.discussions.push({
         githubNodeId: d.id,
         number: d.number,

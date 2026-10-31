@@ -2,7 +2,11 @@ import type { Prisma } from "@prisma/client";
 
 export type JsonList = Prisma.InputJsonValue;
 
+/** Why a thread was imported. open = current work; referenced = linked from current work. */
+export type FetchReason = "open" | "referenced" | "legacy";
+
 export interface IssueRow {
+  fetchReason?: FetchReason;
   githubId: bigint;
   number: number;
   title: string;
@@ -30,6 +34,7 @@ export interface CommentRow {
 }
 
 export interface PullRequestRow {
+  fetchReason?: FetchReason;
   githubId: bigint;
   number: number;
   title: string;
@@ -141,6 +146,19 @@ export interface RepoFileRow {
   ref: string;
 }
 
+export interface WriteStats {
+  created: number;
+  updated: number;
+  unchanged: number;
+}
+
+export interface ReferenceRow {
+  fromKind: "issue" | "pull_request";
+  fromNumber: number;
+  toNumber: number;
+  basis: "reference_in_body" | "reference_in_comment" | "closing_reference";
+}
+
 export type ResourceName =
   | "issues"
   | "issueComments"
@@ -152,11 +170,27 @@ export type ResourceName =
   | "prCommits"
   | "commits"
   | "discussions"
-  | "repoFiles";
+  | "repoFiles"
+  | "references"
+  | "historicalIssues"
+  | "historicalPullRequests";
 
 export interface ResourceResult {
   status: "ok" | "partial" | "error" | "skipped";
+  /** Records fetched from GitHub and handed to the database. */
   count: number;
+  /** Records GitHub reports exist for this selection (e.g. all open issues), when known. */
+  discovered?: number;
+  /** Records chosen for a full conversation import (the rest keep metadata only). */
+  selected?: number;
+  /** Records that were new or changed in the database (count - unchanged). */
+  stored?: number;
+  /** Records already up to date in the database; nothing was written. */
+  unchanged?: number;
+  /** Records deliberately not imported in full (quiet threads, closed discussions...). */
+  skipped?: number;
+  /** Records that could not be fetched or stored. */
+  failed?: number;
   error?: string;
   /** Non-fatal information that does not change the status. */
   note?: string;
@@ -177,28 +211,60 @@ export interface SyncStore {
   getKnownNumbers(
     projectId: string
   ): Promise<{ issues: Set<number>; pullRequests: Set<number> }>;
-  upsertIssues(projectId: string, rows: IssueRow[]): Promise<void>;
-  upsertIssueComments(projectId: string, rows: CommentRow[]): Promise<void>;
-  upsertPullRequests(projectId: string, rows: PullRequestRow[]): Promise<void>;
-  upsertPrComments(projectId: string, rows: CommentRow[]): Promise<void>;
-  upsertReviews(projectId: string, rows: ReviewRow[]): Promise<void>;
+  upsertIssues(projectId: string, rows: IssueRow[]): Promise<WriteStats>;
+  upsertIssueComments(
+    projectId: string,
+    rows: CommentRow[]
+  ): Promise<WriteStats>;
+  upsertPullRequests(
+    projectId: string,
+    rows: PullRequestRow[]
+  ): Promise<WriteStats>;
+  upsertPrComments(projectId: string, rows: CommentRow[]): Promise<WriteStats>;
+  upsertReviews(projectId: string, rows: ReviewRow[]): Promise<WriteStats>;
   upsertReviewComments(
     projectId: string,
     rows: ReviewCommentRow[]
-  ): Promise<void>;
-  upsertPrFiles(projectId: string, rows: PrFileRow[]): Promise<void>;
+  ): Promise<WriteStats>;
+  upsertPrFiles(projectId: string, rows: PrFileRow[]): Promise<WriteStats>;
   upsertPrCommits(
     projectId: string,
     rows: { prNumber: number; sha: string }[]
-  ): Promise<void>;
-  upsertCommits(projectId: string, rows: CommitRow[]): Promise<void>;
-  upsertDiscussions(projectId: string, rows: DiscussionRow[]): Promise<void>;
+  ): Promise<WriteStats>;
+  upsertCommits(projectId: string, rows: CommitRow[]): Promise<WriteStats>;
+  upsertDiscussions(
+    projectId: string,
+    rows: DiscussionRow[]
+  ): Promise<WriteStats>;
   upsertDiscussionComments(
     projectId: string,
     rows: DiscussionCommentRow[]
+  ): Promise<WriteStats>;
+  upsertReferences(
+    projectId: string,
+    rows: ReferenceRow[]
+  ): Promise<WriteStats>;
+  /** Numbers of threads currently stored as open (to detect ones closed since). */
+  listOpenNumbers(
+    projectId: string
+  ): Promise<{ issues: number[]; pullRequests: number[] }>;
+  /** Which of these numbers are already stored, and under which fetch reason. */
+  findStored(
+    projectId: string,
+    kind: "issue" | "pull_request",
+    numbers: number[]
+  ): Promise<Map<number, FetchReason>>;
+  /** Legacy rows that turn out to be linked from current work become "referenced". */
+  markReferenced(
+    projectId: string,
+    kind: "issue" | "pull_request",
+    numbers: number[]
   ): Promise<void>;
   /** Replaces the tree snapshot: upserts rows and removes paths no longer present. */
   replaceRepoFiles(projectId: string, rows: RepoFileRow[]): Promise<void>;
   /** Upsert without deleting (used when GitHub truncated the tree). */
-  upsertRepoFilesOnly(projectId: string, rows: RepoFileRow[]): Promise<void>;
+  upsertRepoFilesOnly(
+    projectId: string,
+    rows: RepoFileRow[]
+  ): Promise<WriteStats>;
 }

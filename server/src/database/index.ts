@@ -1,5 +1,5 @@
 import { PrismaClient } from "@prisma/client";
-import { config, maskConnectionUrl } from "../config/env";
+import { config, maskConnectionUrl, withPoolLimit } from "../config/env";
 
 // Ensure BigInt serialization to string for JSON responses
 (BigInt.prototype as unknown as { toJSON: () => string }).toJSON = function () {
@@ -16,7 +16,7 @@ export const prisma =
     datasources: config.resolvedDatabaseUrl
       ? {
           db: {
-            url: config.resolvedDatabaseUrl,
+            url: withPoolLimit(config.resolvedDatabaseUrl),
           },
         }
       : undefined,

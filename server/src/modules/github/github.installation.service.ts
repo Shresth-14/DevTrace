@@ -14,40 +14,32 @@ export class GithubInstallationService {
     const accessToken = await githubAuthService.getValidAccessToken(userId);
     const octokit = createUserOctokit(accessToken);
 
-    let installationsFromApi: Array<{
-      id: number;
-      account: {
-        login?: string;
-        id?: number;
-        type?: string;
-        avatar_url?: string;
-      } | null;
-      target_type?: string;
-      repository_selection?: string;
-      suspended_at?: string | null;
-    }> = [];
-
-    try {
-      installationsFromApi = await octokit.paginate(
-        octokit.rest.apps.listInstallationsForAuthenticatedUser,
-        { per_page: 100 }
-      );
-    } catch (error) {
-      console.warn(
-        `[GitHub Installations] Error querying installations for user ${userId}:`,
-        error
-      );
-    }
+    // Throws on API failure so callers can tell "no installations" from "could not ask".
+    const installationsFromApi = await octokit.paginate(
+      octokit.rest.apps.listInstallationsForAuthenticatedUser,
+      { per_page: 100 }
+    );
 
     const syncedInstallations: GithubInstallationDto[] = [];
 
     for (const inst of installationsFromApi) {
-      if (!inst.account?.login || !inst.account?.id) continue;
+      // `account` is a user/org, or an enterprise (which has a slug instead of a login)
+      const raw = inst.account;
+      const account =
+        raw && "login" in raw
+          ? {
+              login: raw.login,
+              id: raw.id,
+              type: raw.type,
+              avatar_url: raw.avatar_url,
+            }
+          : null;
+      if (!account?.login || !account.id) continue;
 
       const installationId = BigInt(inst.id);
-      const accountId = BigInt(inst.account.id);
+      const accountId = BigInt(account.id);
       const accountType =
-        inst.account.type === "Organization" ? "Organization" : "User";
+        account.type === "Organization" ? "Organization" : "User";
       const repositorySelection =
         inst.repository_selection === "selected" ? "selected" : "all";
       const status = inst.suspended_at ? "suspended" : "active";
@@ -60,20 +52,20 @@ export class GithubInstallationService {
           },
         },
         update: {
-          accountLogin: inst.account.login,
+          accountLogin: account.login,
           accountId,
           accountType,
-          accountAvatarUrl: inst.account.avatar_url || null,
+          accountAvatarUrl: account.avatar_url || null,
           targetType: inst.target_type || accountType,
           repositorySelection,
           status,
         },
         create: {
           installationId,
-          accountLogin: inst.account.login,
+          accountLogin: account.login,
           accountId,
           accountType,
-          accountAvatarUrl: inst.account.avatar_url || null,
+          accountAvatarUrl: account.avatar_url || null,
           targetType: inst.target_type || accountType,
           repositorySelection,
           status,
@@ -94,6 +86,18 @@ export class GithubInstallationService {
       });
     }
 
+    // Installations the user can no longer see (app uninstalled / access removed).
+    await prisma.githubInstallation.updateMany({
+      where: {
+        userId,
+        status: { not: "deleted" },
+        installationId: {
+          notIn: installationsFromApi.map((i) => BigInt(i.id)),
+        },
+      },
+      data: { status: "deleted" },
+    });
+
     return syncedInstallations;
   }
 
@@ -108,28 +112,21 @@ export class GithubInstallationService {
       select: { githubUsername: true },
     });
 
-    let existing = await prisma.githubInstallation.findMany({
+    // Refresh from GitHub every time so a newly installed app (or newly added
+    // organisation) shows up immediately. If GitHub cannot be reached we still
+    // serve what we stored rather than showing nothing.
+    try {
+      await this.syncUserInstallations(userId);
+    } catch (error) {
+      console.warn(
+        `[GitHub Installations] Refresh failed for user ${userId}; using stored installations.`,
+        error instanceof Error ? error.message : error
+      );
+    }
+
+    const existing = await prisma.githubInstallation.findMany({
       where: { userId, status: "active" },
     });
-
-    if (existing.length === 0) {
-      try {
-        existing = await prisma.githubInstallation.findMany({
-          where: { userId, status: "active" },
-        });
-        if (existing.length === 0) {
-          const synced = await this.syncUserInstallations(userId);
-          existing = await prisma.githubInstallation.findMany({
-            where: { userId, status: "active" },
-          });
-          if (existing.length === 0 && synced.length > 0) {
-            return synced;
-          }
-        }
-      } catch {
-        return [];
-      }
-    }
 
     const currentUsername = user?.githubUsername?.toLowerCase();
 

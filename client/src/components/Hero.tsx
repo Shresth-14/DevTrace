@@ -141,7 +141,7 @@ export function Hero() {
               <div className="flex items-center gap-1.5 text-xs font-mono text-[#77796F]">
                 <span className="text-[#2D3327] font-semibold">dev-trace / core-repo</span>
                 <span>/</span>
-                <span>DEC-084</span>
+                <span>DEC-084 · illustrative example</span>
               </div>
             </div>
 

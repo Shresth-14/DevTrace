@@ -1,6 +1,7 @@
 "use client";
 
-import { XCircle } from "lucide-react";
+import { ExternalLink, XCircle } from "lucide-react";
+import { formatDate } from "@/lib/format";
 import type { RejectedApproach } from "./types";
 import {
   EmptyState,
@@ -30,8 +31,8 @@ export function RejectedSection({
 
       {approaches.length === 0 ? (
         <EmptyState icon={XCircle} title="No rejected approaches recorded">
-          When a discussion explicitly rules out an alternative, it will appear
-          here with its rejection reason and supporting evidence.
+          Only alternatives that a discussion explicitly rejected, with evidence,
+          are listed here. Unresolved disagreements are not shown as rejections.
         </EmptyState>
       ) : (
         <ol className="divide-y divide-dt-line border-y border-dt-line">
@@ -49,7 +50,10 @@ export function RejectedSection({
                   {item.alternative.name}
                 </h3>
                 <p className="text-sm text-dt-muted-text">
-                  Proposed by {item.alternative.proposedBy}
+                  {item.alternative.proposedBy
+                    ? `Proposed by @${item.alternative.proposedBy}`
+                    : "Proposer not identified"}
+                  {item.date ? ` · ${formatDate(item.date)}` : ""}
                 </p>
                 <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-dt-muted-text">
                   <span>In decision</span>
@@ -71,16 +75,19 @@ export function RejectedSection({
                 <section className="space-y-1.5">
                   <Eyebrow>Why it was rejected</Eyebrow>
                   <p className="text-sm leading-relaxed text-dt-ink">
-                    {item.alternative.reason}
+                    {item.alternative.reason ??
+                      "The discussion does not state a reason."}
                   </p>
                 </section>
 
-                <section className="space-y-1.5 border-l-2 border-dt-sage pl-4">
-                  <Eyebrow>Chosen instead</Eyebrow>
-                  <p className="text-sm font-medium leading-relaxed text-dt-ink-strong">
-                    {item.alternative.chosenApproach}
-                  </p>
-                </section>
+                {item.alternative.chosenApproach ? (
+                  <section className="space-y-1.5 border-l-2 border-dt-sage pl-4">
+                    <Eyebrow>Chosen instead</Eyebrow>
+                    <p className="text-sm font-medium leading-relaxed text-dt-ink-strong">
+                      {item.alternative.chosenApproach}
+                    </p>
+                  </section>
+                ) : null}
 
                 {item.alternative.evidenceQuotes.length > 0 ? (
                   <section className="space-y-3">
@@ -89,7 +96,20 @@ export function RejectedSection({
                       {item.alternative.evidenceQuotes.map((q) => (
                         <Quote
                           key={`${q.author}-${q.quote.slice(0, 24)}`}
-                          attribution={`${q.author} · ${q.source}`}
+                          attribution={
+                            <>
+                              @{q.author} · {q.source} ·{" "}
+                              <a
+                                href={q.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={`inline-flex items-center gap-1 rounded text-dt-forest hover:underline ${FOCUS}`}
+                              >
+                                open original
+                                <ExternalLink className="h-3 w-3" aria-hidden="true" />
+                              </a>
+                            </>
+                          }
                         >
                           {q.quote}
                         </Quote>

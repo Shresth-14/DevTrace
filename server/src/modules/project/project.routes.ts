@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { projectController } from "./project.controller";
 import { requireAuth, optionalAuth } from "../../middleware/auth";
+import { decisionController } from "../decisions/decision.controller";
 import { githubSyncController } from "../github/sync/github.sync.controller";
 
 export const projectRouter = Router();
@@ -29,4 +30,25 @@ projectRouter.get("/:slug/sync", requireAuth, (req, res) =>
 );
 projectRouter.get("/:slug/sources/:resource", requireAuth, (req, res) =>
   githubSyncController.sources(req, res)
+);
+
+// Decision intelligence (read: owner, or anyone for public repositories)
+projectRouter.post("/:slug/extract", requireAuth, (req, res) =>
+  decisionController.extract(req, res)
+);
+projectRouter.get("/:slug/overview", optionalAuth, (req, res) =>
+  decisionController.overview(req, res)
+);
+projectRouter.get("/:slug/decisions", optionalAuth, (req, res) =>
+  decisionController.decisions(req, res)
+);
+projectRouter.get("/:slug/pr-intelligence", optionalAuth, (req, res) =>
+  decisionController.prIntelligence(req, res)
+);
+projectRouter.get("/:slug/source-feed", optionalAuth, (req, res) =>
+  decisionController.sourceFeed(req, res)
+);
+
+projectRouter.delete("/:slug", requireAuth, (req, res) =>
+  githubSyncController.remove(req, res)
 );

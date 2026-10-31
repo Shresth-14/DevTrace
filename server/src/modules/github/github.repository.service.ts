@@ -3,6 +3,7 @@ import { githubAuthService } from "./github.auth.service";
 import { githubInstallationService } from "./github.installation.service";
 import { GithubRepositoryDto } from "./github.types";
 import { prisma } from "../../database";
+import { describeError } from "./sync/github.errors";
 
 export interface ListRepositoriesOptions {
   installationId?: string;
@@ -18,6 +19,8 @@ export interface ListRepositoriesResult {
   page: number;
   perPage: number;
   hasMore: boolean;
+  /** Installations GitHub could not list right now (their repositories are missing from the result). */
+  warnings: { installationId: string; accountLogin: string; message: string }[];
 }
 
 export class GithubRepositoryService {
@@ -39,7 +42,11 @@ export class GithubRepositoryService {
       perPage = 30,
     } = options;
 
-    let targetInstallations: Array<{ installationId: string }> = [];
+    let targetInstallations: Array<{
+      installationId: string;
+      accountLogin: string;
+    }> = [];
+    const warnings: ListRepositoriesResult["warnings"] = [];
 
     if (installationId) {
       const hasAccess =
@@ -50,12 +57,18 @@ export class GithubRepositoryService {
       if (!hasAccess) {
         throw new Error("Unauthorized access to this GitHub installation.");
       }
-      targetInstallations = [{ installationId }];
+      const own = (
+        await githubInstallationService.getUserInstallations(userId)
+      ).find((i) => i.installationId === String(installationId));
+      targetInstallations = [
+        { installationId, accountLogin: own?.accountLogin ?? "" },
+      ];
     } else {
       const userInstallations =
         await githubInstallationService.getUserInstallations(userId);
       targetInstallations = userInstallations.map((i) => ({
         installationId: i.installationId,
+        accountLogin: i.accountLogin,
       }));
     }
 
@@ -120,8 +133,13 @@ export class GithubRepositoryService {
       } catch (err) {
         console.warn(
           `[GitHub Repos] Error fetching repos for installation ${inst.installationId}:`,
-          err
+          err instanceof Error ? err.message : err
         );
+        warnings.push({
+          installationId: inst.installationId,
+          accountLogin: inst.accountLogin,
+          message: describeError(err),
+        });
       }
     }
 
@@ -141,6 +159,7 @@ export class GithubRepositoryService {
       page,
       perPage,
       hasMore: startIndex + perPage < totalCount,
+      warnings,
     };
   }
 

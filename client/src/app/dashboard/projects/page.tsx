@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import { useDashboard } from "@/context/DashboardContext";
+import { AI_LABEL, SYNC_LABEL, relativeTime } from "@/lib/format";
 import {
   Search,
   Plus,
@@ -17,7 +18,14 @@ import {
 } from "lucide-react";
 
 export default function DashboardProjectsPage() {
-  const { projects, openAddProject, removeProject } = useDashboard();
+  const {
+    projects,
+    projectsLoading,
+    projectsError,
+    refreshProjects,
+    openAddProject,
+    removeProject,
+  } = useDashboard();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [visibilityFilter, setVisibilityFilter] = useState<
@@ -34,9 +42,9 @@ export default function DashboardProjectsPage() {
       const query = searchQuery.toLowerCase();
       const matchesSearch =
         project.name.toLowerCase().includes(query) ||
-        project.owner.toLowerCase().includes(query) ||
-        project.description.toLowerCase().includes(query) ||
-        project.primaryLanguage.toLowerCase().includes(query);
+        project.githubRepoFullName.toLowerCase().includes(query) ||
+        (project.description ?? "").toLowerCase().includes(query) ||
+        (project.primaryLanguage ?? "").toLowerCase().includes(query);
 
       const matchesVisibility =
         visibilityFilter === "all"
@@ -55,7 +63,10 @@ export default function DashboardProjectsPage() {
       if (sortBy === "decisions") {
         return b.decisionsCount - a.decisionsCount;
       }
-      return 0;
+      return (
+        Date.parse(b.updatedAt ?? b.createdAt) -
+        Date.parse(a.updatedAt ?? a.createdAt)
+      );
     });
 
     return result;
@@ -160,8 +171,40 @@ export default function DashboardProjectsPage() {
         )}
       </div>
 
-      {/* Premium Repository Card Grid */}
-      {filteredProjects.length === 0 ? (
+      {projectsLoading ? (
+        <div role="status" className="p-12 rounded-2xl bg-white border border-[#DDD8CC] text-center text-xs text-[#77796F]">
+          Loading your projects…
+        </div>
+      ) : projectsError ? (
+        <div role="alert" className="p-8 rounded-2xl bg-white border border-red-200 text-center space-y-3">
+          <p className="text-sm font-bold text-red-700">Could not load your projects</p>
+          <p className="text-xs text-[#77796F]">{projectsError}</p>
+          <button
+            type="button"
+            onClick={() => void refreshProjects()}
+            className="px-3.5 py-1.5 rounded-xl border border-[#DDD8CC] text-xs font-semibold text-[#2D3327] hover:bg-[#F7F5ED]"
+          >
+            Try again
+          </button>
+        </div>
+      ) : projects.length === 0 ? (
+        <div className="p-12 rounded-2xl bg-white border border-dashed border-[#DDD8CC] text-center space-y-3">
+          <div className="w-10 h-10 rounded-xl bg-[#F7F5ED] text-[#77796F] flex items-center justify-center mx-auto border border-[#EAE4D5]">
+            <FolderGit2 className="w-5 h-5" />
+          </div>
+          <h3 className="text-sm font-bold text-[#2D3327]">No repositories added yet</h3>
+          <p className="text-xs text-[#77796F] max-w-sm mx-auto">
+            Paste the URL of a public GitHub repository and Dev Trace will import its issues, pull requests and discussions, then recover the decisions made in them.
+          </p>
+          <button
+            type="button"
+            onClick={openAddProject}
+            className="px-4 py-2 rounded-xl bg-[#35432C] hover:bg-[#283421] text-[#FAF8F3] text-xs font-semibold"
+          >
+            Add a repository
+          </button>
+        </div>
+      ) : filteredProjects.length === 0 ? (
         <div className="p-12 rounded-2xl bg-white border border-[#DDD8CC] text-center space-y-3">
           <div className="w-10 h-10 rounded-xl bg-[#F7F5ED] text-[#77796F] flex items-center justify-center mx-auto border border-[#EAE4D5]">
             <FolderGit2 className="w-5 h-5" />
@@ -210,7 +253,7 @@ export default function DashboardProjectsPage() {
                       />
                     </svg>
                     <span className="font-mono text-xs text-[#77796F] truncate">
-                      {project.owner}
+                      {project.githubRepoFullName.split("/")[0]}
                     </span>
                   </div>
 
@@ -238,7 +281,7 @@ export default function DashboardProjectsPage() {
                     {project.name}
                   </Link>
                   <p className="text-xs text-[#6F7365] leading-relaxed line-clamp-2 mt-1.5 min-h-[2rem]">
-                    {project.description}
+                    {project.description || "No description on GitHub."}
                   </p>
                 </div>
               </div>
@@ -247,11 +290,8 @@ export default function DashboardProjectsPage() {
               <div className="pt-4 mt-4 border-t border-[#F2ECE0] space-y-2.5">
                 <div className="flex items-center justify-between text-xs">
                   <span className="flex items-center gap-1.5 text-[11px] font-medium text-[#2D3327]">
-                    <span
-                      className="w-2 h-2 rounded-full"
-                      style={{ backgroundColor: project.languageColor }}
-                    />
-                    {project.primaryLanguage}
+                    <span className="w-2 h-2 rounded-full bg-[#9BAF8B]" />
+                    {project.primaryLanguage ?? "Language unknown"}
                   </span>
 
                   <span className="font-mono text-[11px] bg-[#DCE6D3]/60 text-[#2D3728] px-2 py-0.5 rounded font-semibold">
@@ -260,9 +300,27 @@ export default function DashboardProjectsPage() {
                 </div>
 
                 <div className="flex items-center justify-between text-[11px] font-mono text-[#77796F]">
-                  <span className="flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#4E673D]" />
-                    Synced {project.lastSyncedAt}
+                  <span className="flex items-center gap-1" title={`${SYNC_LABEL[project.syncStatus] ?? project.syncStatus}; ${AI_LABEL[project.aiStatus] ?? project.aiStatus}`}>
+                    <span
+                      className={`w-1.5 h-1.5 rounded-full ${
+                        project.syncStatus === "failed" || project.aiStatus === "failed"
+                          ? "bg-[#9E3426]"
+                          : project.syncStatus === "running" || project.aiStatus === "running"
+                            ? "animate-pulse bg-[#7A5200]"
+                            : project.syncStatus === "partial" || project.aiStatus === "partial"
+                              ? "bg-[#7A5200]"
+                              : project.lastSyncedAt
+                                ? "bg-[#4E673D]"
+                                : "bg-[#9BAF8B]"
+                      }`}
+                    />
+                    {project.syncStatus === "running"
+                      ? "Importing…"
+                      : project.aiStatus === "running"
+                        ? "Analysing…"
+                        : project.lastSyncedAt
+                          ? `Synced ${relativeTime(project.lastSyncedAt)}`
+                          : SYNC_LABEL[project.syncStatus] ?? "Not synced"}
                   </span>
 
                   <span className="flex items-center gap-1 text-[10px] text-[#77796F]">
@@ -275,7 +333,7 @@ export default function DashboardProjectsPage() {
               {/* Card Footer: Action Buttons */}
               <div className="pt-4 mt-3 border-t border-[#F2ECE0] flex items-center justify-between gap-2">
                 <a
-                  href={project.githubUrl}
+                  href={project.githubRepoUrl}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="p-2 rounded-lg text-[#77796F] hover:text-[#2D3327] hover:bg-[#F7F5ED] transition-colors"
@@ -293,7 +351,7 @@ export default function DashboardProjectsPage() {
                       <button
                         type="button"
                         onClick={() => {
-                          removeProject(project.id);
+                          void removeProject(project);
                           setActiveDeleteId(null);
                         }}
                         className="px-2 py-0.5 rounded bg-red-600 text-white text-[10px] font-bold hover:bg-red-700"

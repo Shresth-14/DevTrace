@@ -1,6 +1,12 @@
 import { prisma } from "../../database";
 import { githubRepositoryService } from "../github/github.repository.service";
 import { Project } from "@prisma/client";
+import type { Octokit } from "octokit";
+import { HttpError } from "../../utils/http-error";
+import { parseGithubRepoUrl } from "../../utils/github-url";
+import { createThrottledUserOctokit } from "../github/github.octokit";
+import { githubAuthService } from "../github/github.auth.service";
+import { describeError, errorStatus } from "../github/sync/github.errors";
 import { githubSyncService } from "../github/sync/github.sync.service";
 
 function slugify(text: string): string {
@@ -132,6 +138,90 @@ export class ProjectService {
       );
 
     return created;
+  }
+
+  /**
+   * Adds a PUBLIC GitHub repository by URL. Needs no app installation: the owner's
+   * own GitHub sign-in is enough to read public data. Starts the import right away.
+   */
+  public async connectPublicRepository(
+    userId: string,
+    repositoryUrl: string,
+    getClient: (userId: string) => Promise<Octokit> = async (id) =>
+      createThrottledUserOctokit(
+        await githubAuthService.getValidAccessToken(id)
+      )
+  ): Promise<{ project: Project; alreadyConnected: boolean }> {
+    const ref = parseGithubRepoUrl(repositoryUrl);
+    if (!ref) {
+      throw new HttpError(
+        400,
+        "Enter a public GitHub repository URL, for example https://github.com/owner/repo."
+      );
+    }
+
+    const octokit = await getClient(userId);
+    let repo;
+    try {
+      ({ data: repo } = await octokit.rest.repos.get(ref));
+    } catch (err) {
+      const status = errorStatus(err);
+      if (status === 404) {
+        throw new HttpError(
+          404,
+          `${ref.owner}/${ref.repo} was not found. Check the URL, and that the repository is public.`
+        );
+      }
+      if (status === 403 || status === 429) {
+        throw new HttpError(
+          429,
+          "GitHub is rate-limiting requests right now. Try again in a few minutes."
+        );
+      }
+      throw new HttpError(
+        502,
+        `Could not read the repository from GitHub: ${describeError(err)}`
+      );
+    }
+    if (repo.private) {
+      throw new HttpError(
+        400,
+        "Only public repositories can be added by URL. This repository is private."
+      );
+    }
+
+    const existing = await prisma.project.findUnique({
+      where: { userId_githubRepoId: { userId, githubRepoId: BigInt(repo.id) } },
+    });
+    if (existing) return { project: existing, alreadyConnected: true };
+
+    const slug = await this.generateUniqueSlug(repo.name, repo.owner.login);
+    const project = await prisma.project.create({
+      data: {
+        name: repo.name,
+        slug,
+        description: repo.description,
+        userId,
+        githubRepoId: BigInt(repo.id),
+        githubRepoFullName: repo.full_name,
+        githubRepoName: repo.name,
+        githubRepoOwner: repo.owner.login,
+        githubRepoUrl: repo.html_url,
+        defaultBranch: repo.default_branch,
+        isPrivate: false,
+        primaryLanguage: repo.language,
+      },
+    });
+
+    githubSyncService
+      .startSync(project.slug, userId, { trigger: "initial" })
+      .catch((err) =>
+        console.warn(
+          "[Project] Initial GitHub sync could not start:",
+          err instanceof Error ? err.message : err
+        )
+      );
+    return { project, alreadyConnected: false };
   }
 
   /**

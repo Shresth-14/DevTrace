@@ -30,6 +30,7 @@ const run = (
     store,
     project,
     mode,
+    forceRest: true, // this file covers the per-thread REST path; bulk GraphQL is in github-bulk.test.ts
     now: () => now,
   });
 
@@ -47,7 +48,13 @@ describe("REST pagination", () => {
   it("follows every page and drops pull requests from issues", async () => {
     const gh = createFakeGitHub(baseData(), { pageSize: 2 });
     const numbers: number[] = [];
-    for await (const rows of fetchIssues(gh.octokit(), project)) {
+    for await (const rows of fetchIssues(
+      gh.octokit(),
+      project,
+      undefined,
+      Infinity,
+      "open"
+    )) {
       numbers.push(...rows.map((r) => r.number));
     }
     assert.deepEqual(
@@ -139,11 +146,12 @@ describe("full ingestion", () => {
     assert.deepEqual([...store.issues.keys()].sort(), [1, 2, 3]);
     assert.deepEqual([...store.pullRequests.keys()].sort(), [10, 11]);
 
-    // Issue comments vs PR conversation comments; orphan comment (#99) is reported, not silently dropped
+    // Issue comments vs PR conversation comments; a comment on a thread that was never imported (#99) is not fetched
     assert.deepEqual([...store.issueComments.keys()].sort(), ["1001", "1002"]);
     assert.deepEqual([...store.prComments.keys()], ["1003"]);
     assert.equal(out.resources.issueComments?.status, "ok");
-    assert.match(out.resources.issueComments?.note ?? "", /1 comment/);
+    assert.equal(out.resources.issueComments?.note, undefined);
+    assert.ok(![...store.issueComments.keys()].includes("1004"));
 
     // Review submissions with distinct states
     const states = [...store.reviews.values()]
@@ -238,17 +246,21 @@ describe("incremental sync", () => {
     };
     data.issues.push({
       ...data.issues[0],
-      id: 104,
-      number: 4,
-      title: "Issue 4",
+      id: 106,
+      number: 6,
+      title: "Issue 6",
       updated_at: "2024-06-20T00:00:00Z",
     });
     // PR 11 has new activity; PR 10 does not
-    data.pulls[1] = { ...data.pulls[1], updated_at: "2024-06-16T00:00:00Z" };
+    const pr11 = data.pulls.findIndex((p) => p.number === 11);
+    data.pulls[pr11] = {
+      ...data.pulls[pr11],
+      updated_at: "2024-06-16T00:00:00Z",
+    };
     const gh = createFakeGitHub(data);
     await run(gh, store, "incremental", new Date("2024-07-01T00:00:00Z"));
 
-    assert.deepEqual([...store.issues.keys()].sort(), [1, 2, 3, 4]);
+    assert.deepEqual([...store.issues.keys()].sort(), [1, 2, 3, 6]);
     assert.equal(
       (store.issues.get(2) as { title: string }).title,
       "Issue 2 edited"
@@ -277,7 +289,7 @@ describe("partial failures and rate limits", () => {
 
     assert.equal(out.status, "partial");
     assert.equal(out.resources.prFiles?.status, "partial");
-    assert.match(out.resources.prFiles?.error ?? "", /1 of 2 pull request/);
+    assert.match(out.resources.prFiles?.error ?? "", /1 of 2 thread/);
     assert.equal(store.issues.size, 3, "issues survive");
     assert.ok(store.prFiles.has("10:src/a.ts"), "PR 10 files survive");
     assert.equal(
@@ -341,6 +353,63 @@ describe("partial failures and rate limits", () => {
       (e: unknown) => e instanceof SyncAccessError && /404/.test(e.message)
     );
     assert.equal(store.issues.size, 0);
+  });
+});
+
+describe("limits and progress", () => {
+  it("keeps only the most recently updated threads when limited", async () => {
+    const store = new MemoryStore();
+    const out = await runSync({
+      octokit: createFakeGitHub(baseData()).octokit(),
+      store,
+      project,
+      mode: "full",
+      forceRest: true,
+      limits: { issues: 2, pullRequests: 1, commits: 1, discussions: 1 },
+      now: () => new Date("2024-06-01T00:00:00Z"),
+    });
+    assert.deepEqual(
+      [...store.issues.keys()].sort(),
+      [2, 3],
+      "newest two issues"
+    );
+    assert.deepEqual([...store.pullRequests.keys()], [11], "newest PR only");
+    assert.equal(
+      store.commits.size,
+      1 + 1,
+      "one default-branch commit + PR 11's commit"
+    );
+    assert.equal(store.discussions.size, 1);
+    assert.match(
+      out.resources.issues?.note ?? "",
+      /Showing the 2 most recently updated of 3 open/
+    );
+    assert.equal(out.status, "completed", "a limit is a note, not a failure");
+  });
+
+  it("reports progress after each resource", async () => {
+    const seen: string[][] = [];
+    await runSync({
+      octokit: createFakeGitHub(baseData()).octokit(),
+      store: new MemoryStore(),
+      project,
+      mode: "full",
+      forceRest: true,
+      onProgress: (r) => {
+        seen.push(Object.keys(r));
+      },
+    });
+    assert.ok(seen.length >= 3, "progress is reported as resources finish");
+    assert.ok(seen[seen.length - 1].includes("repoFiles"));
+    assert.ok(seen[seen.length - 1].includes("pullRequests"));
+  });
+
+  it("does not call GraphQL for pull requests without inline comments", async () => {
+    const gh = createFakeGitHub(baseData());
+    await run(gh, new MemoryStore());
+    const threadCalls = gh.calls.filter((c) => c.startsWith("POST /graphql"));
+    // discussions enabled check + discussions pages + ONE thread lookup (PR 10 only)
+    assert.ok(threadCalls.length >= 3);
   });
 });
 

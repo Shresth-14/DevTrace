@@ -224,7 +224,16 @@ export class GithubController {
     try {
       const installations =
         await githubInstallationService.getUserInstallations(user.id);
-      res.json({ installations });
+      res.json({
+        installations: installations.map((i) => ({
+          ...i,
+          manageUrl:
+            i.accountType === "Organization"
+              ? `https://github.com/organizations/${i.accountLogin}/settings/installations/${i.installationId}`
+              : `https://github.com/settings/installations/${i.installationId}`,
+        })),
+        installUrl: githubAuthService.getInstallationUrl(),
+      });
     } catch (error) {
       console.error("[GitHub Controller] Error listing installations:", error);
       res.status(500).json({
@@ -263,7 +272,10 @@ export class GithubController {
         perPage,
       });
 
-      res.json(result);
+      res.json({
+        ...result,
+        installUrl: githubAuthService.getInstallationUrl(),
+      });
     } catch (error) {
       console.error("[GitHub Controller] Error listing repositories:", error);
       res.status(500).json({

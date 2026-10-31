@@ -6,6 +6,7 @@ import { healthRouter } from "./routes/health";
 import { githubRouter } from "./modules/github/github.routes";
 import { projectRouter } from "./modules/project/project.routes";
 import { aiRouter } from "./modules/ai/ai.routes";
+import { dashboardRouter } from "./modules/decisions/dashboard.routes";
 
 export const createApp = (): Application => {
   const app = express();
@@ -56,6 +57,7 @@ export const createApp = (): Application => {
   // GitHub integration & project endpoints
   app.use("/api/github", githubRouter);
   app.use("/api/projects", projectRouter);
+  app.use("/api/dashboard", dashboardRouter);
 
   // AI inference endpoints (OpenRouter & modular providers)
   app.use("/api/v1/ai", aiRouter);

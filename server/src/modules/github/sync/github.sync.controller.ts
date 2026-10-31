@@ -56,6 +56,20 @@ export class GithubSyncController {
     }
   }
 
+  /** DELETE /api/projects/:slug */
+  public async remove(req: Request, res: Response): Promise<void> {
+    try {
+      const user = req.user;
+      if (!user) throw new HttpError(401, "Unauthorized");
+      if (!SLUG.test(req.params.slug))
+        throw new HttpError(400, "Invalid project slug.");
+      await githubSyncService.deleteProject(req.params.slug, user.id);
+      res.json({ success: true });
+    } catch (err) {
+      fail(res, err);
+    }
+  }
+
   /** GET /api/projects/:slug/sync */
   public async status(req: Request, res: Response): Promise<void> {
     try {

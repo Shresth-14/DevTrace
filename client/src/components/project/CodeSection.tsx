@@ -43,8 +43,8 @@ export function CodeSection({
 
       {files.length === 0 ? (
         <EmptyState icon={FileCode2} title="No code relationships yet">
-          Files appear here once a recovered decision can be tied to specific
-          code in this repository.
+          Files appear here only when a recovered decision is tied to code by a
+          pull request, an inline review comment, or a verified file reference.
         </EmptyState>
       ) : (
         <>
@@ -81,9 +81,23 @@ export function CodeSection({
                     {items.map((f) => (
                       <li key={f.path} className="space-y-2 py-4">
                         <FilePath path={f.path} lines={f.lines} />
-                        <p className="pl-5 text-sm leading-relaxed text-dt-muted-text">
-                          {f.description}
+                        <p className="pl-5 text-xs text-dt-muted-text">
+                          <span
+                            className={`mr-2 rounded px-1.5 py-0.5 font-medium ${
+                              f.relationship === "direct"
+                                ? "bg-dt-sage-pale text-dt-forest"
+                                : "bg-dt-unresolved-bg text-dt-unresolved"
+                            }`}
+                          >
+                            {f.relationship === "direct" ? "Direct evidence" : "Inferred"}
+                          </span>
+                          {f.previousPath ? `previously ${f.previousPath}` : null}
                         </p>
+                        {f.description ? (
+                          <p className="pl-5 text-sm leading-relaxed text-dt-muted-text">
+                            {f.description}
+                          </p>
+                        ) : null}
                         <ul className="flex flex-wrap gap-x-5 gap-y-1.5 pl-5">
                           {f.decisions.map((d) => (
                             <li key={d.id} className="min-w-0">

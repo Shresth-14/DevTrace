@@ -88,10 +88,18 @@ model Project {
   lastSyncedAt DateTime?
   syncCursor   Json?
 
+  // AI decision extraction state (separate from GitHub sync state)
+  aiStatus        String    @default("pending") // pending | running | completed | partial | failed | not_configured
+  lastExtractedAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   syncJobs           SyncJob[]
+  extractionRuns     ExtractionRun[]
+  extractionUnits    ExtractionUnit[]
+  decisions          Decision[]
+  threadReferences   ThreadReference[]
   issues             GithubIssue[]
   issueComments      GithubIssueComment[]
   pullRequests       GithubPullRequest[]
@@ -152,9 +160,14 @@ model GithubIssue {
 
   comments GithubIssueComment[]
 
+  /// Why this thread was imported: open (current work), referenced (linked from current
+  /// work), legacy (imported by an earlier version without a reason)
+  fetchReason String @default("legacy")
+
   @@unique([projectId, number])
   @@unique([projectId, githubId])
   @@index([projectId, updatedAtGh])
+  @@index([projectId, state])
 }
 
 model GithubIssueComment {
@@ -204,9 +217,12 @@ model GithubPullRequest {
   files          GithubPrFile[]
   commits        GithubPrCommit[]
 
+  fetchReason String @default("legacy") // open | referenced | legacy (see GithubIssue)
+
   @@unique([projectId, number])
   @@unique([projectId, githubId])
   @@index([projectId, updatedAtGh])
+  @@index([projectId, state])
 }
 
 // General PR conversation comments (not inline, not review submissions)
@@ -377,4 +393,160 @@ model GithubRepoFile {
   ref       String
 
   @@unique([projectId, path])
+}
+
+// ---------------------------------------------------------------------------
+// AI-generated interpretation. Kept apart from the raw source tables above;
+// evidence rows point back at real imported records, never at model output.
+// ---------------------------------------------------------------------------
+
+model ExtractionRun {
+  id             String    @id @default(cuid())
+  projectId      String
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  status         String    @default("running") // running | completed | partial | failed
+  phase          String    @default("analyzing") // analyzing | validating | saving
+  model          String
+  version        String
+  force          Boolean   @default(false)
+  unitsTotal     Int       @default(0)
+  unitsDone      Int       @default(0)
+  unitsFailed    Int       @default(0)
+  decisionsSaved Int       @default(0)
+  error          String?
+  startedAt      DateTime  @default(now())
+  finishedAt     DateTime?
+
+  @@index([projectId, startedAt])
+}
+
+// One analysable thread (issue / PR / discussion). The content hash lets us skip
+// threads that have not changed since they were last analysed.
+model ExtractionUnit {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  kind        String // issue | pull_request | discussion
+  number      Int
+  contentHash String
+  status      String // done | failed
+  model       String
+  version     String
+  error       String?
+  processedAt DateTime @default(now())
+
+  @@unique([projectId, kind, number])
+}
+
+model Decision {
+  id            String    @id @default(cuid())
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  /// Stable per-project number shown as DEC-001
+  seq           Int
+  /// Normalised-title hash used to merge the same decision found in several threads
+  fingerprint   String
+  title         String
+  summary       String
+  status        String // accepted | rejected | proposed | withdrawn | unresolved
+  reasoning     Json // [{ category, explanation }]
+  openQuestions String?
+  participants  Json // logins seen in the evidence
+  confidence    Float?
+  model         String
+  version       String
+  decidedAt     DateTime? // date of the latest piece of evidence
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  evidence     DecisionEvidence[]
+  alternatives DecisionAlternative[]
+  codeLinks    DecisionCodeLink[]
+
+  @@unique([projectId, seq])
+  @@unique([projectId, fingerprint])
+  @@index([projectId, status])
+}
+
+model DecisionEvidence {
+  id           String    @id @default(cuid())
+  decisionId   String
+  decision     Decision  @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+  /// issue | issue_comment | pull_request | pr_comment | review | review_comment | discussion | discussion_comment | commit
+  sourceType   String
+  /// Natural key of the imported record (issue number, GitHub comment id, node id, sha)
+  sourceKey    String
+  /// Issue / PR / discussion the record belongs to
+  threadKind   String
+  threadNumber Int
+  author       String?
+  quote        String
+  url          String
+  occurredAt   DateTime?
+
+  alternativeLinks AlternativeEvidence[]
+
+  @@unique([decisionId, sourceType, sourceKey])
+  @@index([decisionId])
+}
+
+model DecisionAlternative {
+  id            String   @id @default(cuid())
+  decisionId    String
+  decision      Decision @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+  title         String
+  proposedBy    String?
+  reason        String?
+  status        String // rejected | withdrawn | unresolved | proposed
+  chosenInstead String?
+
+  evidence AlternativeEvidence[]
+
+  @@unique([decisionId, title])
+}
+
+model AlternativeEvidence {
+  alternativeId String
+  alternative   DecisionAlternative @relation(fields: [alternativeId], references: [id], onDelete: Cascade)
+  evidenceId    String
+  evidence      DecisionEvidence    @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+
+  @@id([alternativeId, evidenceId])
+}
+
+model DecisionCodeLink {
+  id           String   @id @default(cuid())
+  decisionId   String
+  decision     Decision @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+  path         String
+  previousPath String?
+  /// direct = a source record names or changes the file; inferred = model-suggested and found in the repo tree
+  relationship String // direct | inferred
+  basis        String // pr_file | review_comment | model_inferred
+  description  String?
+  commitSha    String?
+  line         Int?
+  prNumber     Int?
+
+  @@unique([decisionId, path, basis])
+  @@index([decisionId])
+}
+
+/// Explicit links between threads (issue/PR A mentions or closes B). Only relationships
+/// GitHub or the text states are stored; similar titles are never turned into a link.
+model ThreadReference {
+  id           String   @id @default(cuid())
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  fromKind     String // issue | pull_request
+  fromNumber   Int
+  toNumber     Int
+  /// reference_in_body | reference_in_comment | closing_reference
+  basis        String
+  /// direct = stated by GitHub metadata or by an explicit #N / URL in the text
+  relationship String   @default("direct")
+  createdAt    DateTime @default(now())
+
+  @@unique([projectId, fromKind, fromNumber, toNumber, basis])
+  @@index([projectId, toNumber])
 }

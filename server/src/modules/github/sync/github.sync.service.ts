@@ -1,20 +1,19 @@
 import type { Octokit } from "octokit";
 import { prisma } from "../../../database";
-import { getInstallationOctokit } from "../github.octokit";
+import {
+  createThrottledUserOctokit,
+  getInstallationOctokit,
+} from "../github.octokit";
+import { githubAuthService } from "../github.auth.service";
+import { decisionExtractionService } from "../../decisions/decision.service";
+import { HttpError } from "../../../utils/http-error";
 import { SyncAccessError, describeError } from "./github.errors";
-import { runSync } from "./github.sync.runner";
+import { runSync, type ImportLimits } from "./github.sync.runner";
 import { PrismaSyncStore } from "./github.sync.store";
 import type { SyncStore } from "./github.sync.types";
 import type { Prisma, PrismaClient, SyncJob } from "@prisma/client";
 
-export class HttpError extends Error {
-  constructor(
-    public readonly status: number,
-    message: string
-  ) {
-    super(message);
-  }
-}
+export { HttpError };
 
 // A "running" job older than this is assumed dead (e.g. the server restarted).
 const STALE_JOB_MS = 30 * 60 * 1000;
@@ -40,16 +39,45 @@ export function isSourceResource(v: string): v is SourceResource {
 
 export interface SyncDeps {
   db: PrismaClient;
+  /** Called after a sync that imported data, e.g. to start AI extraction. */
+  afterSync?: (projectId: string) => Promise<unknown>;
   store: SyncStore;
-  getOctokit: (installationId: bigint) => Promise<Octokit>;
+  /**
+   * Client for a project's import: the GitHub App installation when the project has
+   * one, otherwise the owner's own GitHub token (public repositories added by URL).
+   */
+  getOctokit: (ctx: {
+    installationId: bigint | null;
+    userId: string;
+  }) => Promise<Octokit>;
+  limits?: Partial<ImportLimits>;
+}
+
+/** Import caps keep a first sync of a very large public repository quick. */
+export function defaultImportLimits(): ImportLimits {
+  const n = Number(process.env.IMPORT_MAX_ITEMS);
+  const threads = Number.isInteger(n) && n > 0 ? n : 500;
+  return {
+    issues: threads,
+    pullRequests: threads,
+    discussions: Math.min(threads, 100),
+    commits: 300,
+    referenced: 60,
+  };
 }
 
 export class GithubSyncService {
   constructor(
     private readonly deps: SyncDeps = {
       db: prisma,
+      afterSync: (id) => decisionExtractionService.requestRun(id),
       store: new PrismaSyncStore(prisma),
-      getOctokit: (id) => getInstallationOctokit(id),
+      getOctokit: async ({ installationId, userId }) =>
+        installationId
+          ? getInstallationOctokit(installationId)
+          : createThrottledUserOctokit(
+              await githubAuthService.getValidAccessToken(userId)
+            ),
     }
   ) {}
 
@@ -75,13 +103,6 @@ export class GithubSyncService {
     opts: { full?: boolean; trigger?: "initial" | "manual" } = {}
   ): Promise<SyncJob> {
     const project = await this.requireOwnedProject(slug, userId);
-    if (!project.installation) {
-      throw new HttpError(
-        409,
-        "This project has no GitHub installation. Reinstall the Dev Trace GitHub App and reconnect the repository."
-      );
-    }
-
     const running = await this.deps.db.syncJob.findFirst({
       where: {
         projectId: project.id,
@@ -116,7 +137,10 @@ export class GithubSyncService {
     void this.execute(
       job.id,
       target,
-      project.installation.installationId,
+      {
+        installationId: project.installation?.installationId ?? null,
+        userId: project.userId,
+      },
       mode
     );
     return job;
@@ -126,16 +150,40 @@ export class GithubSyncService {
   public async execute(
     jobId: string,
     project: { id: string; owner: string; repo: string; defaultBranch: string },
-    installationId: bigint,
+    ctx: { installationId: bigint | null; userId: string },
     mode: "full" | "incremental"
   ): Promise<void> {
+    // Analysis starts as soon as the discussion threads are stored, not when the
+    // whole import (commit history etc.) has finished.
+    let analysisStarted = false;
+    const startAnalysis = async () => {
+      if (!this.deps.afterSync) return;
+      analysisStarted = true;
+      await this.deps.afterSync(project.id).catch((err) =>
+        // "not configured" and "already running" are reported through aiStatus / the API
+        console.warn(
+          "[GitHub Sync] AI extraction not started:",
+          err instanceof Error ? err.message : err
+        )
+      );
+    };
+
     try {
-      const octokit = await this.deps.getOctokit(installationId);
+      const octokit = await this.deps.getOctokit(ctx);
       const out = await runSync({
         octokit,
         store: this.deps.store,
         project,
         mode,
+        limits: this.deps.limits ?? defaultImportLimits(),
+        onThreadsReady: startAnalysis,
+        // Live progress: the project page shows each resource as it finishes.
+        onProgress: async (resources) => {
+          await this.deps.db.syncJob.update({
+            where: { id: jobId },
+            data: { resources: resources as unknown as Prisma.InputJsonValue },
+          });
+        },
       });
       await this.deps.db.syncJob.update({
         where: { id: jobId },
@@ -152,6 +200,8 @@ export class GithubSyncService {
           ...(out.status !== "failed" ? { lastSyncedAt: new Date() } : {}),
         },
       });
+      // Normally already started by onThreadsReady; this covers a run that never got there.
+      if (out.status !== "failed" && !analysisStarted) await startAnalysis();
     } catch (err) {
       const message =
         err instanceof SyncAccessError ? err.message : describeError(err);
@@ -168,9 +218,19 @@ export class GithubSyncService {
     }
   }
 
+  /** Disconnects a project. Imported records and decisions are removed with it (FK cascade). */
+  public async deleteProject(slug: string, userId: string): Promise<void> {
+    const project = await this.requireOwnedProject(slug, userId);
+    await this.deps.db.project.delete({ where: { id: project.id } });
+  }
+
   public async getStatus(slug: string, userId: string) {
     const project = await this.requireOwnedProject(slug, userId);
     const latestJob = await this.deps.db.syncJob.findFirst({
+      where: { projectId: project.id },
+      orderBy: { startedAt: "desc" },
+    });
+    const latestRun = await this.deps.db.extractionRun.findFirst({
       where: { projectId: project.id },
       orderBy: { startedAt: "desc" },
     });
@@ -178,6 +238,9 @@ export class GithubSyncService {
       syncStatus: project.syncStatus,
       lastSyncedAt: project.lastSyncedAt,
       latestJob,
+      aiStatus: project.aiStatus,
+      lastExtractedAt: project.lastExtractedAt,
+      latestRun,
     };
   }
 

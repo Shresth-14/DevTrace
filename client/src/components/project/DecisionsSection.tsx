@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import { ExternalLink, FileText, Search } from "lucide-react";
+import { formatDate } from "@/lib/format";
 import type { DecisionRecord, DecisionStatus } from "./types";
 import {
   EmptyState,
@@ -13,6 +14,7 @@ import {
   STATUS_META,
   SectionHeader,
   StatusBadge,
+  StatusDot,
 } from "./ui";
 
 export type StatusFilter = "ALL" | DecisionStatus;
@@ -21,9 +23,24 @@ const FILTERS: StatusFilter[] = [
   "ALL",
   "ACCEPTED",
   "REJECTED",
+  "PROPOSED",
   "WITHDRAWN",
   "UNRESOLVED",
 ];
+
+const CATEGORY_LABEL: Record<string, string> = {
+  performance: "Performance",
+  scalability: "Scalability",
+  security: "Security",
+  compatibility: "Compatibility",
+  maintainability: "Maintainability",
+  developer_experience: "Developer experience",
+  complexity: "Complexity",
+  resource_consumption: "Resource consumption",
+  architecture: "Architecture",
+  backward_compatibility: "Backward compatibility",
+  other: "Reasoning",
+};
 
 interface DecisionsSectionProps {
   decisions: DecisionRecord[];
@@ -65,9 +82,9 @@ export function DecisionsSection({
 
   if (decisions.length === 0) {
     return (
-      <EmptyState icon={FileText} title="No decisions yet">
-        Decisions Dev Trace recovers from this repository&apos;s discussions will
-        be listed here with their status, reasoning and evidence.
+      <EmptyState icon={FileText} title="No decisions extracted yet">
+        Decisions appear here after the repository has been imported and its
+        discussions analysed. Nothing is shown until real evidence exists.
       </EmptyState>
     );
   }
@@ -76,7 +93,7 @@ export function DecisionsSection({
     <div className="space-y-6">
       <SectionHeader
         title="Decisions"
-        description="Each record keeps the decision, why it was made, what was ruled out, and where the evidence lives."
+        description="Each record keeps the decision, why it was made, what was ruled out, and links back to the original discussion."
       />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -150,24 +167,14 @@ export function DecisionsSection({
                       }`}
                     >
                       <span className="flex items-center justify-between gap-3">
-                        <span className="font-mono text-xs text-dt-muted-text">
-                          {d.id}
-                        </span>
-                        <span
-                          className={`inline-flex items-center gap-1.5 text-xs ${STATUS_META[d.status].text}`}
-                        >
-                          <span
-                            className={`h-1.5 w-1.5 rounded-full ${STATUS_META[d.status].dot}`}
-                            aria-hidden="true"
-                          />
-                          {STATUS_META[d.status].label}
-                        </span>
+                        <span className="font-mono text-xs text-dt-muted-text">{d.id}</span>
+                        <StatusDot status={d.status} />
                       </span>
                       <span className="mt-1 line-clamp-2 block text-sm font-medium leading-snug text-dt-ink-strong">
                         {d.title}
                       </span>
                       <span className="mt-1 block text-xs text-dt-muted-text">
-                        {d.date}
+                        {formatDate(d.date)}
                       </span>
                     </button>
                   </li>
@@ -188,54 +195,79 @@ export function DecisionsSection({
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                   <StatusBadge status={active.status} />
                   <span className="font-mono text-xs text-dt-muted-text">
-                    {active.id} · {active.date} · {active.author}
+                    {active.id} · {formatDate(active.date)}
+                    {active.confidence != null
+                      ? ` · confidence ${Math.round(active.confidence * 100)}%`
+                      : ""}
                   </span>
                 </div>
                 <h3 className="text-xl font-semibold leading-snug tracking-tight text-dt-ink-strong sm:text-2xl">
                   {active.title}
                 </h3>
-                <p className="text-base leading-relaxed text-dt-ink">
-                  {active.summary}
-                </p>
+                <p className="text-base leading-relaxed text-dt-ink">{active.summary}</p>
+                {active.participants.length > 0 ? (
+                  <p className="text-xs text-dt-muted-text">
+                    Participants: {active.participants.map((p) => `@${p}`).join(", ")}
+                  </p>
+                ) : null}
               </header>
 
-              <section className="space-y-2">
-                <Eyebrow>Reasoning</Eyebrow>
-                <p className="text-sm leading-relaxed text-dt-ink">
-                  {active.rationale}
-                </p>
-              </section>
+              {active.reasoning.length > 0 ? (
+                <section className="space-y-3">
+                  <Eyebrow>Reasoning</Eyebrow>
+                  <ul className="space-y-3">
+                    {active.reasoning.map((r, i) => (
+                      <li key={i} className="text-sm leading-relaxed text-dt-ink">
+                        <span className="mr-2 rounded bg-dt-bg2 px-1.5 py-0.5 text-[11px] font-medium text-dt-ink-strong">
+                          {CATEGORY_LABEL[r.category] ?? r.category}
+                        </span>
+                        {r.explanation}
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
 
-              {active.rejectedAlternative ? (
+              {active.openQuestions ? (
                 <section className="space-y-2">
-                  <Eyebrow>Alternative considered</Eyebrow>
-                  <div className="border-l-2 border-dt-reject/40 pl-4">
-                    <p className="text-sm font-medium text-dt-ink-strong">
-                      {active.rejectedAlternative.name}
-                      <span className="font-normal text-dt-muted-text">
-                        {" "}
-                        · proposed by {active.rejectedAlternative.proposedBy}
-                      </span>
-                    </p>
-                    <p className="mt-1 text-sm leading-relaxed text-dt-ink">
-                      {active.rejectedAlternative.reason}
-                    </p>
-                    <p className="mt-2 text-sm text-dt-muted-text">
-                      Chosen instead:{" "}
-                      <span className="text-dt-ink-strong">
-                        {active.rejectedAlternative.chosenApproach}
-                      </span>
-                    </p>
-                  </div>
+                  <Eyebrow>Still open</Eyebrow>
+                  <p className="text-sm leading-relaxed text-dt-ink">{active.openQuestions}</p>
+                </section>
+              ) : null}
+
+              {active.alternatives.length > 0 ? (
+                <section className="space-y-3">
+                  <Eyebrow>Alternatives discussed ({active.alternatives.length})</Eyebrow>
+                  <ul className="space-y-4">
+                    {active.alternatives.map((a) => (
+                      <li key={a.name} className="border-l-2 border-dt-reject/40 pl-4">
+                        <p className="flex flex-wrap items-center gap-x-2 text-sm font-medium text-dt-ink-strong">
+                          {a.name}
+                          <StatusDot status={a.status} />
+                          {a.proposedBy ? (
+                            <span className="font-normal text-dt-muted-text">· proposed by @{a.proposedBy}</span>
+                          ) : null}
+                        </p>
+                        {a.reason ? (
+                          <p className="mt-1 text-sm leading-relaxed text-dt-ink">{a.reason}</p>
+                        ) : (
+                          <p className="mt-1 text-sm text-dt-muted-text">No reason recorded in the discussion.</p>
+                        )}
+                        {a.chosenApproach ? (
+                          <p className="mt-2 text-sm text-dt-muted-text">
+                            Chosen instead: <span className="text-dt-ink-strong">{a.chosenApproach}</span>
+                          </p>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
                 </section>
               ) : null}
 
               <section className="space-y-4">
-                <Eyebrow>Sources ({active.sources.length})</Eyebrow>
+                <Eyebrow>Evidence ({active.sources.length})</Eyebrow>
                 {active.sources.length === 0 ? (
-                  <p className="text-sm text-dt-muted-text">
-                    No sources are linked to this decision.
-                  </p>
+                  <p className="text-sm text-dt-muted-text">No sources are linked to this decision.</p>
                 ) : (
                   <ul className="space-y-5">
                     {active.sources.map((s) => {
@@ -244,10 +276,7 @@ export function DecisionsSection({
                         <li key={s.id} className="space-y-2">
                           <div className="flex items-start justify-between gap-3">
                             <p className="flex min-w-0 items-start gap-2 text-sm font-medium text-dt-ink-strong">
-                              <Icon
-                                className="mt-0.5 h-4 w-4 shrink-0 text-dt-accept"
-                                aria-hidden="true"
-                              />
+                              <Icon className="mt-0.5 h-4 w-4 shrink-0 text-dt-accept" aria-hidden="true" />
                               <span className="min-w-0">{s.title}</span>
                             </p>
                             <a
@@ -260,9 +289,7 @@ export function DecisionsSection({
                               <ExternalLink className="h-4 w-4" aria-hidden="true" />
                             </a>
                           </div>
-                          <Quote
-                            attribution={`${s.author} · ${s.date} · ${SOURCE_META[s.type].label}`}
-                          >
+                          <Quote attribution={`@${s.author} · ${formatDate(s.date)} · ${s.badge}`}>
                             {s.quote}
                           </Quote>
                         </li>
@@ -276,21 +303,56 @@ export function DecisionsSection({
                 <Eyebrow>Code ({active.codeFiles.length})</Eyebrow>
                 {active.codeFiles.length === 0 ? (
                   <p className="text-sm text-dt-muted-text">
-                    No code locations are linked to this decision.
+                    No code locations are tied to this decision by the available evidence.
                   </p>
                 ) : (
                   <ul className="divide-y divide-dt-line border-y border-dt-line">
                     {active.codeFiles.map((f) => (
-                      <li key={f.path} className="space-y-1 py-3">
+                      <li key={`${f.path}-${f.basis}`} className="space-y-1 py-3">
                         <FilePath path={f.path} lines={f.lines} />
-                        <p className="pl-5 text-sm text-dt-muted-text">
-                          {f.description}
+                        <p className="pl-5 text-xs text-dt-muted-text">
+                          {f.relationship === "direct" ? "Direct evidence" : "Inferred"}
+                          {" · "}
+                          {f.basis === "pr_file"
+                            ? "changed by the pull request"
+                            : f.basis === "review_comment"
+                              ? "discussed in an inline review comment"
+                              : "suggested by analysis, found in the repository"}
+                          {f.previousPath ? ` · previously ${f.previousPath}` : ""}
+                          {f.commitSha ? ` · at ${f.commitSha.slice(0, 7)}` : ""}
                         </p>
+                        {f.description ? (
+                          <p className="pl-5 text-sm text-dt-muted-text">{f.description}</p>
+                        ) : null}
                       </li>
                     ))}
                   </ul>
                 )}
               </section>
+
+              {active.relatedThreads.length > 0 ? (
+                <section className="space-y-2">
+                  <Eyebrow>Discussions</Eyebrow>
+                  <ul className="space-y-1.5 text-sm">
+                    {active.relatedThreads.map((t) => (
+                      <li key={`${t.kind}-${t.number}`}>
+                        <a
+                          href={t.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`rounded text-dt-forest hover:underline ${FOCUS}`}
+                        >
+                          {t.kind === "pull_request" ? "PR" : t.kind === "issue" ? "Issue" : "Discussion"} #{t.number} · {t.title}
+                        </a>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ) : null}
+
+              <p className="border-t border-dt-line pt-4 font-mono text-[11px] text-dt-muted-text">
+                Extracted by {active.model} · method {active.version}
+              </p>
             </div>
           ) : (
             <p className="rounded-2xl border border-dashed border-dt-line-strong px-6 py-16 text-center text-sm text-dt-muted-text">
