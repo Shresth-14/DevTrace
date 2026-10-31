@@ -1,3 +1,4 @@
+import "./setup-env";
 import assert from "assert";
 import { openRouterService } from "../modules/ai/openrouter.service";
 import { aiService, IAiProvider } from "../modules/ai/ai.service";

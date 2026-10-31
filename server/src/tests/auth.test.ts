@@ -1,3 +1,4 @@
+import "./setup-env";
 import assert from "assert";
 import {
   encrypt,
@@ -63,7 +64,7 @@ async function runTests() {
   assert.ok(
     stateResult.url.includes("https://github.com/login/oauth/authorize")
   );
-  assert.ok(stateResult.url.includes("client_id=Iv23li0WV07X4cRULzEW"));
+  assert.ok(stateResult.url.includes("client_id=test-client-id"));
   assert.ok(stateResult.url.includes("redirect_uri="));
   assert.ok(stateResult.state.length > 20);
 
