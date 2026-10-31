@@ -54,6 +54,7 @@ import { SourcesSection } from "@/components/project/SourcesSection";
 import { CodeSection } from "@/components/project/CodeSection";
 import { PrSection } from "@/components/project/PrSection";
 import { StatusPanel } from "@/components/project/StatusPanel";
+import { InvestigatePanel } from "@/components/project/InvestigatePanel";
 
 const TABS: { id: ProjectTab; label: string; icon: LucideIcon }[] = [
   { id: "overview", label: "Overview", icon: Layers },
@@ -667,6 +668,16 @@ function ProjectWorkspace() {
               busy={acting}
               onSync={handleSync}
               onExtract={handleExtract}
+            />
+          </div>
+        ) : null}
+
+        {isOwner ? (
+          <div className="mb-8">
+            <InvestigatePanel
+              slug={slug}
+              repoFullName={project.githubRepoFullName}
+              onDecisionsSaved={loadData}
             />
           </div>
         ) : null}
