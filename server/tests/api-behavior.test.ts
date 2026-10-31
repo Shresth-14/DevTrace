@@ -1,7 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import request from 'supertest';
-import app from '../src/app';
+import '../src/tests/setup-env';
+import { createApp } from '../src/app';
+
+const app = createApp();
 
 test('unknown route returns 404', async () => {
   const res = await request(app).get('/does-not-exist');

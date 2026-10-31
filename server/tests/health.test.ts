@@ -1,7 +1,10 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import request from "supertest";
-import { app } from "../src/app";
+import "../src/tests/setup-env";
+import { createApp } from "../src/app";
+
+const app = createApp();
 
 describe("GET /health", () => {
   it("should return HTTP 200 with status ok and DevTrace running message", async () => {
