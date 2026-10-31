@@ -354,7 +354,7 @@ export class InvestigationService {
     if (!this.deps.llm.isConfigured()) {
       throw new HttpError(
         503,
-        "AI extraction is not configured. Set OPENROUTER_API_KEY in server/.env."
+        "AI extraction is not configured. Ensure Ollama is running ('ollama serve') and model is available."
       );
     }
 

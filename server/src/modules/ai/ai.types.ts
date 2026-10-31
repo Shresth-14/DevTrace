@@ -20,6 +20,7 @@ export interface AiChatOptions {
   maxTokens?: number;
   timeoutMs?: number;
   signal?: AbortSignal;
+  format?: "json" | string;
 }
 
 export interface AiChatResponse {
@@ -40,15 +41,31 @@ export interface AiStreamChunk {
   usage?: AiUsage;
 }
 
-export class OpenRouterNotConfiguredError extends Error {
-  public readonly code = "OPENROUTER_NOT_CONFIGURED";
+export class OllamaUnavailableError extends Error {
+  public readonly code = "OLLAMA_UNAVAILABLE";
   public readonly statusCode = 503;
 
   constructor(
-    message = "OpenRouter API key is not configured. Set OPENROUTER_API_KEY in server/.env to enable AI decision reconstruction."
+    message = "Ollama is not running or unreachable at http://localhost:11434. Start Ollama with 'ollama serve' or open the Ollama app."
   ) {
     super(message);
-    this.name = "OpenRouterNotConfiguredError";
+    this.name = "OllamaUnavailableError";
+  }
+}
+
+export class OllamaModelMissingError extends Error {
+  public readonly code = "OLLAMA_MODEL_MISSING";
+  public readonly statusCode = 503;
+  public readonly model: string;
+
+  constructor(model: string, installedModels: string[] = []) {
+    const hint =
+      installedModels.length > 0
+        ? `\n\nCurrently installed models: ${installedModels.join(", ")}\nOr download the configured model using:\n\n  ollama pull ${model}\n`
+        : `\n\nDownload it using:\n\n  ollama pull ${model}\n`;
+    super(`Ollama model '${model}' is not installed.${hint}`);
+    this.name = "OllamaModelMissingError";
+    this.model = model;
   }
 }
 

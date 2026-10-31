@@ -61,7 +61,7 @@ export const createApp = (): Application => {
   app.use("/api/projects", projectRouter);
   app.use("/api/dashboard", dashboardRouter);
 
-  // AI inference endpoints (OpenRouter & modular providers)
+  // AI inference endpoints (local Ollama provider)
   app.use("/api/v1/ai", aiRouter);
   app.use("/api/ai", aiRouter);
 

@@ -86,7 +86,7 @@ export class ProjectService {
 
     if (existing) {
       // Update with latest repo metadata
-      return prisma.project.update({
+      const updated = await prisma.project.update({
         where: { id: existing.id },
         data: {
           name: repository.name,
@@ -101,6 +101,8 @@ export class ProjectService {
           installationId: installationRecordId || existing.installationId,
         },
       });
+      githubRepositoryService.invalidateCache(userId);
+      return updated;
     }
 
     // 3. Generate unique slug
@@ -127,6 +129,7 @@ export class ProjectService {
         installationId: installationRecordId,
       },
     });
+    githubRepositoryService.invalidateCache(userId);
 
     githubSyncService
       .startSync(created.slug, userId, { trigger: "initial" })
@@ -212,6 +215,7 @@ export class ProjectService {
         primaryLanguage: repo.language,
       },
     });
+    githubRepositoryService.invalidateCache(userId);
 
     githubSyncService
       .startSync(project.slug, userId, { trigger: "initial" })

@@ -424,7 +424,7 @@ describe("decision extraction pipeline", { skip }, () => {
     assert.equal(llm.calls.length, before + 1);
   });
 
-  it("refuses to run when OpenRouter is not configured", async () => {
+  it("refuses to run when AI provider is not configured", async () => {
     llm.configured = false;
     await assert.rejects(
       svc.start(slug, ownerId),

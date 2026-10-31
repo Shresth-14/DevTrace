@@ -211,12 +211,12 @@ describe("project + decision endpoints (HTTP)", { skip }, () => {
   });
 
   it("reports an unconfigured AI provider instead of pretending to run", async () => {
-    // setup-env blanks OPENROUTER_API_KEY, so extraction must refuse with 503.
+    // If AI provider is unconfigured, extraction must refuse with 503.
     const res = await request(app)
       .post(`/api/projects/${slugs.priv}/extract`)
       .set(as(ids.owner, "o"));
     assert.equal(res.status, 503);
-    assert.match(res.body.message, /OPENROUTER_API_KEY/);
+    assert.match(res.body.message, /not configured/i);
     const p = await prisma.project.findUniqueOrThrow({
       where: { id: ids.privateProject },
     });

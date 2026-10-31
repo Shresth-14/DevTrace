@@ -165,6 +165,7 @@ export class GithubController {
       if (payload?.userId) {
         try {
           await githubInstallationService.syncUserInstallations(payload.userId);
+          githubRepositoryService.invalidateCache(payload.userId);
         } catch (syncErr) {
           console.warn("[GitHub Setup] Installation sync warning:", syncErr);
         }

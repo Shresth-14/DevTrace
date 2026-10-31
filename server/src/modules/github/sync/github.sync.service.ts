@@ -6,6 +6,7 @@ import {
 } from "../github.octokit";
 import { githubAuthService } from "../github.auth.service";
 import { decisionExtractionService } from "../../decisions/decision.service";
+import { githubRepositoryService } from "../github.repository.service";
 import { HttpError } from "../../../utils/http-error";
 import { SyncAccessError, describeError } from "./github.errors";
 import { runSync, type ImportLimits } from "./github.sync.runner";
@@ -70,7 +71,13 @@ export class GithubSyncService {
   constructor(
     private readonly deps: SyncDeps = {
       db: prisma,
-      afterSync: (id) => decisionExtractionService.requestRun(id),
+      // AUTO_ANALYSE_ON_SYNC=true is required to start AI extraction after sync.
+      // Default is off to avoid running heavy bulk inference unprompted on
+      // every import. Set AUTO_ANALYSE_ON_SYNC=true in server/.env to enable.
+      afterSync:
+        process.env.AUTO_ANALYSE_ON_SYNC === "true"
+          ? (id) => decisionExtractionService.requestRun(id)
+          : undefined,
       store: new PrismaSyncStore(prisma),
       getOctokit: async ({ installationId, userId }) =>
         installationId
@@ -222,6 +229,7 @@ export class GithubSyncService {
   public async deleteProject(slug: string, userId: string): Promise<void> {
     const project = await this.requireOwnedProject(slug, userId);
     await this.deps.db.project.delete({ where: { id: project.id } });
+    githubRepositoryService.invalidateCache(userId);
   }
 
   public async getStatus(slug: string, userId: string) {

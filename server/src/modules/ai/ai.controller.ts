@@ -2,10 +2,11 @@ import { Request, Response } from "express";
 import { aiService } from "./ai.service";
 import {
   ChatMessage,
-  OpenRouterNotConfiguredError,
   AiTimeoutError,
   AiUpstreamError,
   AiInvalidRequestError,
+  OllamaUnavailableError,
+  OllamaModelMissingError,
 } from "./ai.types";
 
 export class AiController {
@@ -100,11 +101,21 @@ export class AiController {
    * Helper to format standardized JSON errors.
    */
   private handleError(res: Response, error: unknown): void {
-    if (error instanceof OpenRouterNotConfiguredError) {
+    if (error instanceof OllamaUnavailableError) {
       res.status(error.statusCode).json({
-        error: "Configuration Error",
+        error: "Ollama Unavailable",
         code: error.code,
         message: error.message,
+      });
+      return;
+    }
+
+    if (error instanceof OllamaModelMissingError) {
+      res.status(error.statusCode).json({
+        error: "Model Missing",
+        code: error.code,
+        message: error.message,
+        model: error.model,
       });
       return;
     }
@@ -212,7 +223,7 @@ export class AiController {
       // Verify configured before writing SSE headers so we can return standard 503 JSON if not configured
       const status = aiService.getStatus();
       if (!status.configured) {
-        throw new OpenRouterNotConfiguredError();
+        throw new OllamaUnavailableError("Local AI runtime is not configured.");
       }
 
       // Initialize SSE response headers
@@ -279,13 +290,26 @@ export class AiController {
    * Health and configuration status of AI service.
    * GET /api/v1/ai/status
    */
-  public getStatus = (_req: Request, res: Response): void => {
+  public getStatus = async (req: Request, res: Response): Promise<void> => {
+    const wantsDiagnostics =
+      req.query.diagnostics === "true" || req.query.check === "true";
+    if (wantsDiagnostics) {
+      const health = await aiService.checkHealth();
+      res.json({
+        provider: health.provider,
+        configured: health.configured,
+        model: health.model,
+        availableProviders: ["ollama"],
+        diagnostics: health.diagnostics,
+      });
+      return;
+    }
     const status = aiService.getStatus();
     res.json({
       provider: status.provider,
       configured: status.configured,
       model: status.model,
-      availableProviders: ["openrouter"],
+      availableProviders: ["ollama"],
     });
   };
 }

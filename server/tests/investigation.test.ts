@@ -730,7 +730,7 @@ describe("daily model limit", () => {
     const { inv } = await investigate(service, "#1");
     assert.equal(attempts, 1, "one attempt: no retries, and no second call for the summary");
     assert.equal(inv.status, "partial");
-    assert.match(inv.error ?? "", /daily limit for free models is used up/);
+    assert.match(inv.error ?? "", /Model daily limit reached/);
     assert.match(inv.result!.summaryError ?? "", /daily limit/);
     assert.ok(inv.result!.thread.items.length >= 2, "the real conversation is still shown");
   });

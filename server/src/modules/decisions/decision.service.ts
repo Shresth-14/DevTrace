@@ -1,8 +1,8 @@
 import type { PrismaClient } from "@prisma/client";
 import { prisma } from "../../database";
 import { HttpError } from "../../utils/http-error";
-import { openRouterService } from "../ai/openrouter.service";
-import { describeLlmError } from "./decision.errors";
+import { aiService } from "../ai/ai.service";
+import { describeLlmError, isDailyModelLimit } from "./decision.errors";
 import {
   extractUnit,
   type ExtractorOptions,
@@ -33,7 +33,7 @@ export class DecisionExtractionService {
     const db = deps?.db ?? prisma;
     this.deps = {
       db,
-      llm: deps?.llm ?? openRouterService,
+      llm: deps?.llm ?? aiService,
       store: deps?.store ?? new DecisionStore(db),
       extractor: deps?.extractor ?? {},
       maxUnits:
@@ -88,10 +88,8 @@ export class DecisionExtractionService {
         where: { id: projectId },
         data: { aiStatus: "not_configured" },
       });
-      throw new HttpError(
-        503,
-        "AI extraction is not configured. Set OPENROUTER_API_KEY (and optionally OPENROUTER_MODEL / OPENROUTER_BASE_URL) in server/.env."
-      );
+      const hint = `AI extraction is not configured. Ensure Ollama is running ('ollama serve') and model is available ('ollama pull ${aiService.getModel()}').`;
+      throw new HttpError(503, hint);
     }
     const running = await this.deps.db.extractionRun.findFirst({
       where: {
@@ -152,10 +150,23 @@ export class DecisionExtractionService {
       let sent = 0;
       let skippedForCap = 0;
       let firstError: string | undefined;
+      /** Set to true when a daily model limit quota fires; drains the queue. */
+      let dailyLimitHit = false;
       const queue = [...headers];
+
+      // Throttling for extractionRun.update progress writes: ≤1/sec OR ≤1 per 10 units.
+      let lastProgressWriteAt = 0;
+      let unitsSinceLastProgressWrite = 0;
+      let writingProgress = false;
 
       const worker = async () => {
         for (let h = queue.shift(); h; h = queue.shift()) {
+          // Circuit breaker: daily limit was already hit — stop processing.
+          if (dailyLimitHit) {
+            skippedForCap += 1;
+            continue;
+          }
+
           const unit = await loadUnit(db, projectId, h.kind, h.number);
           if (!unit) {
             done += 1;
@@ -239,29 +250,54 @@ export class DecisionExtractionService {
                   processedAt: new Date(),
                 },
               });
+              // Circuit breaker: daily limit is unrecoverable for today.
+              // Drain the remaining queue without touching those units.
+              if (isDailyModelLimit(err)) {
+                dailyLimitHit = true;
+              }
             }
             done += 1;
           }
-          await db.extractionRun.update({
-            where: { id: runId },
-            data: {
-              unitsDone: done,
-              unitsFailed: failed,
-              decisionsSaved: saved,
-            },
-          });
+
+          unitsSinceLastProgressWrite += 1;
+          const now = Date.now();
+          if (
+            (unitsSinceLastProgressWrite >= 10 || now - lastProgressWriteAt >= 1000) &&
+            !writingProgress
+          ) {
+            writingProgress = true;
+            lastProgressWriteAt = now;
+            unitsSinceLastProgressWrite = 0;
+            try {
+              await db.extractionRun.update({
+                where: { id: runId },
+                data: {
+                  unitsDone: done,
+                  unitsFailed: failed,
+                  decisionsSaved: saved,
+                },
+              });
+            } catch {
+              // Non-fatal: final update after all workers finish guarantees accurate state.
+            } finally {
+              writingProgress = false;
+            }
+          }
         }
       };
       await Promise.all(Array.from({ length: CONCURRENCY }, worker));
 
       const status =
-        sent > 0 && failed === sent
-          ? "failed"
-          : failed > 0 || skippedForCap > 0
-            ? "partial"
-            : "completed";
-      const note =
-        skippedForCap > 0
+        dailyLimitHit
+          ? "partial"
+          : sent > 0 && failed === sent
+            ? "failed"
+            : failed > 0 || skippedForCap > 0
+              ? "partial"
+              : "completed";
+      const note = dailyLimitHit
+        ? `Model daily limit reached after ${failed} unit(s). Remaining threads were not touched; run extraction again later.`
+        : skippedForCap > 0
           ? `${skippedForCap} thread(s) were not analysed in this run; run extraction again to continue.`
           : undefined;
       await db.extractionRun.update({
