@@ -1,0 +1,93 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id               String               @id @default(cuid())
+  email            String?              @unique
+  name             String?
+  githubId         BigInt               @unique
+  githubUsername   String
+  githubAvatarUrl  String?
+  githubProfileUrl String?
+  githubUserType   String               @default("User")
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  token            GithubAccountToken?
+  installations    GithubInstallation[]
+  projects         Project[]
+
+  @@index([githubUsername])
+}
+
+model GithubAccountToken {
+  id                    String    @id @default(cuid())
+  userId                String    @unique
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessTokenEncrypted  String
+  refreshTokenEncrypted String?
+  expiresAt             DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+model GithubInstallation {
+  id                  String    @id @default(cuid())
+  installationId      BigInt
+  accountLogin        String
+  accountId           BigInt
+  accountType         String    // "User" or "Organization"
+  accountAvatarUrl    String?
+  targetType          String?   // "User" or "Organization"
+  repositorySelection String    @default("all") // "all" or "selected"
+  status              String    @default("active") // "active", "suspended", "deleted"
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  projects            Project[]
+
+  @@unique([userId, installationId])
+  @@index([accountLogin])
+  @@index([userId])
+}
+
+model Project {
+  id                 String              @id @default(cuid())
+  name               String
+  slug               String              @unique
+  description        String?
+  userId             String
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // GitHub repository association
+  githubRepoId       BigInt
+  githubRepoFullName String              // "owner/repo"
+  githubRepoName     String              // "repo"
+  githubRepoOwner    String              // "owner"
+  githubRepoUrl      String
+  defaultBranch      String              @default("main")
+  isPrivate          Boolean             @default(false)
+  primaryLanguage    String?
+
+  installationId     String?
+  installation       GithubInstallation? @relation(fields: [installationId], references: [id], onDelete: SetNull)
+
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+
+  @@unique([userId, githubRepoId])
+  @@index([slug])
+  @@index([userId])
+  @@index([githubRepoFullName])
+}
