@@ -1,6 +1,7 @@
 import { App, Octokit } from "octokit";
 import Bottleneck from "bottleneck";
 import { config } from "../../config/env";
+import { requestTiming } from "./github.timing";
 
 /**
  * Octokit with throttling + retry (both bundled in the official `octokit` package).
@@ -28,7 +29,7 @@ const graphqlLimiter = new Bottleneck.Group({
   minTime: 100,
 });
 
-export const DevTraceOctokit = Octokit.defaults({
+export const DevTraceOctokit = Octokit.plugin(requestTiming).defaults({
   userAgent: "dev-trace",
   throttle: {
     write: graphqlLimiter,
