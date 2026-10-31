@@ -33,6 +33,18 @@ jobs:
         run: npm run typecheck
         working-directory: server
 
+      - name: Lint backend
+        run: npm run lint
+        working-directory: server
+
+      - name: Validate Prisma schema
+        run: npm run db:validate
+        working-directory: server
+        env:
+          # Placeholders only: validate checks the schema, it never connects.
+          DATABASE_URL: postgresql://user:password@localhost:5432/db
+          DIRECT_URL: postgresql://user:password@localhost:5432/db
+
       - name: Run backend tests
         run: npm test
         working-directory: server
@@ -62,6 +74,10 @@ jobs:
 
       - name: Run frontend lint
         run: npm run lint
+        working-directory: client
+
+      - name: Typecheck frontend
+        run: npm run typecheck
         working-directory: client
 
       - name: Run frontend tests
