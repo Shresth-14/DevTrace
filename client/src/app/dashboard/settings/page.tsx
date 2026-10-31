@@ -1,25 +1,12 @@
 "use client";
 
-import React, { useState } from "react";
+import React from "react";
 import { useDashboard } from "@/context/DashboardContext";
-import {
-  User,
-  Shield,
-  Bell,
-  LogOut,
-  CheckCircle2,
-  Save,
-} from "lucide-react";
+import { GITHUB_APP_SLUG } from "@/lib/api";
+import { User, Shield, LogOut } from "lucide-react";
 
 export default function DashboardSettingsPage() {
-  const { user, handleLogout, addToast } = useDashboard();
-
-  const [autoSync, setAutoSync] = useState(true);
-  const [sensitivity, setSensitivity] = useState<"standard" | "high">("standard");
-
-  const handleSavePreferences = () => {
-    addToast("Preferences saved successfully.", "success");
-  };
+  const { user, handleLogout } = useDashboard();
 
   return (
     <div className="space-y-8 animate-in fade-in duration-150 max-w-3xl">
@@ -54,7 +41,7 @@ export default function DashboardSettingsPage() {
           <div className="flex flex-col sm:flex-row sm:items-center gap-5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={user.avatarUrl}
+              src={user.avatarUrl ?? `https://github.com/${user.username}.png`}
               alt={user.username}
               className="w-16 h-16 rounded-full ring-2 ring-[#9BAF8B]/40 shrink-0"
             />
@@ -63,7 +50,7 @@ export default function DashboardSettingsPage() {
               <p className="text-xs font-mono text-[#77796F]">
                 github.com/{user.username}
               </p>
-              <p className="text-xs text-[#77796F]">{user.email}</p>
+              {user.email ? <p className="text-xs text-[#77796F]">{user.email}</p> : null}
             </div>
           </div>
         </div>
@@ -79,8 +66,8 @@ export default function DashboardSettingsPage() {
                 GitHub Authorization
               </h3>
               <p className="text-xs text-[#77796F]">
-                Connected via Dev Trace GitHub App with fine-grained repository
-                permissions.
+                Signed in with GitHub. Repositories are read through the Dev Trace
+                GitHub App, only where you installed it.
               </p>
             </div>
           </div>
@@ -92,91 +79,12 @@ export default function DashboardSettingsPage() {
                 @{user.username}
               </span>
             </div>
-            <div className="flex items-center justify-between py-2 border-b border-[#F2ECE0]">
+            <div className="flex items-center justify-between py-2">
               <span className="text-[#77796F]">App Slug</span>
               <span className="font-mono font-semibold text-[#38462F]">
-                dev-trace2607
+                {GITHUB_APP_SLUG}
               </span>
             </div>
-            <div className="flex items-center justify-between py-2">
-              <span className="text-[#77796F]">Permissions</span>
-              <span className="inline-flex items-center gap-1 font-semibold text-[#38462F]">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                Read-only issues, discussions & contents
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* 3. Indexing & Preferences */}
-        <div className="p-6 rounded-2xl bg-white border border-[#DDD8CC] shadow-xs space-y-5">
-          <div className="flex items-center gap-3 border-b border-[#F2ECE0] pb-4">
-            <div className="w-8 h-8 rounded-lg bg-[#EAE6D8] text-[#38462F] flex items-center justify-center">
-              <Bell className="w-4 h-4" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-[#41463B]">
-                Indexing & Decision Preferences
-              </h3>
-              <p className="text-xs text-[#77796F]">
-                Configure real-time webhooks and decision extraction.
-              </p>
-            </div>
-          </div>
-
-          <div className="space-y-4 text-xs">
-            {/* Toggle 1 */}
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-semibold text-[#41463B]">
-                  Automatic Webhook Synchronization
-                </p>
-                <p className="text-[11px] text-[#77796F]">
-                  Instantly index technical discussions when PRs or issues are
-                  closed.
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                checked={autoSync}
-                onChange={(e) => setAutoSync(e.target.checked)}
-                className="w-4 h-4 text-[#38462F] rounded accent-[#38462F] cursor-pointer"
-              />
-            </div>
-
-            {/* Toggle 2 */}
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-semibold text-[#41463B]">
-                  Decision Synthesis Sensitivity
-                </p>
-                <p className="text-[11px] text-[#77796F]">
-                  Controls filtering of minor code formatting reviews vs
-                  architectural decisions.
-                </p>
-              </div>
-              <select
-                value={sensitivity}
-                onChange={(e) =>
-                  setSensitivity(e.target.value as "standard" | "high")
-                }
-                className="px-2.5 py-1.5 rounded-lg bg-[#F7F5ED] border border-[#DDD8CC] text-xs text-[#41463B] font-medium cursor-pointer"
-              >
-                <option value="standard">Architectural decisions only</option>
-                <option value="high">All design discussions</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="pt-2">
-            <button
-              type="button"
-              onClick={handleSavePreferences}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#38462F] hover:bg-[#2B3724] text-[#FAF8F3] text-xs font-semibold transition-all shadow-xs"
-            >
-              <Save className="w-3.5 h-3.5 text-[#C5D6B4]" />
-              <span>Save preferences</span>
-            </button>
           </div>
         </div>
 

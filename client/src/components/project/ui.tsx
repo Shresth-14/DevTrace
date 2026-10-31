@@ -1,7 +1,9 @@
 import type { ReactNode } from "react";
 import {
   GitPullRequest,
+  GitCommit,
   MessageSquare,
+  MessageSquareCode,
   CircleDot,
   MessagesSquare,
   FileCode2,
@@ -29,6 +31,12 @@ export const STATUS_META: Record<
     text: "text-dt-reject",
     badge: "bg-dt-reject-bg text-dt-reject",
   },
+  PROPOSED: {
+    label: "Proposed",
+    dot: "bg-dt-sage",
+    text: "text-dt-ink",
+    badge: "bg-dt-sage-pale text-dt-ink",
+  },
   WITHDRAWN: {
     label: "Withdrawn",
     dot: "bg-dt-muted",
@@ -51,7 +59,8 @@ export const SOURCE_META: Record<
   issue: { label: "GitHub Issue", icon: CircleDot },
   pr: { label: "Pull Request", icon: GitPullRequest },
   comment: { label: "Comment", icon: MessageSquare },
-  discord: { label: "Discord thread", icon: MessageSquare },
+  review: { label: "Review", icon: MessageSquareCode },
+  commit: { label: "Commit", icon: GitCommit },
 };
 
 export function StatusBadge({ status }: { status: DecisionStatus }) {
@@ -184,8 +193,8 @@ export function Quote({
   );
 }
 
-/** Parses the sample data's display dates ("Oct 25, 2026") for sorting. */
-export function dateValue(label: string): number {
-  const t = Date.parse(label);
+/** Sortable value of an ISO timestamp; missing dates sort last. */
+export function dateValue(iso: string | null | undefined): number {
+  const t = iso ? Date.parse(iso) : NaN;
   return Number.isNaN(t) ? 0 : t;
 }

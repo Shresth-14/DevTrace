@@ -9,6 +9,8 @@ const app = createApp();
 describe("sync routes require authentication", () => {
   for (const [method, path] of [
     ["post", "/api/projects/widgets/sync"],
+    ["post", "/api/projects/widgets/extract"],
+    ["get", "/api/dashboard/summary"],
     ["get", "/api/projects/widgets/sync"],
     ["get", "/api/projects/widgets/sources/issues"],
   ] as const) {

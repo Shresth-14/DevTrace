@@ -1,4 +1,5 @@
 import { App, Octokit } from "octokit";
+import Bottleneck from "bottleneck";
 import { config } from "../../config/env";
 
 /**
@@ -13,9 +14,24 @@ interface ThrottledRequest {
   url: string;
 }
 
+/**
+ * Octokit's throttling plugin sends every GraphQL request (and any write) through a
+ * single queue with a one-second gap, shared by the whole process. That is a safe
+ * default for mutations but needlessly serialises our read-only GraphQL imports
+ * (about 1 request per second in total). We never write to GitHub, so GraphQL reads
+ * get a small bounded pool instead: 4 in flight, 100 ms apart. Rate-limit and
+ * secondary-rate-limit responses are still honoured by the handlers below.
+ */
+const graphqlLimiter = new Bottleneck.Group({
+  id: "dev-trace-graphql",
+  maxConcurrent: 4,
+  minTime: 100,
+});
+
 export const DevTraceOctokit = Octokit.defaults({
   userAgent: "dev-trace",
   throttle: {
+    write: graphqlLimiter,
     onRateLimit: (
       retryAfter: number,
       options: ThrottledRequest,
@@ -50,7 +66,9 @@ let cachedKey = "";
 export function getGitHubApp(): App {
   const missing: string[] = [];
   if (!config.githubAppId) missing.push("GITHUB_APP_ID");
-  if (!config.githubPrivateKey) missing.push("GITHUB_PRIVATE_KEY");
+  if (!config.githubPrivateKey) {
+    missing.push("GITHUB_PRIVATE_KEY (or GITHUB_PRIVATE_KEY_PATH)");
+  }
   if (missing.length > 0 || !config.githubAppId || !config.githubPrivateKey) {
     throw new Error(
       `GitHub App is not configured. Missing environment variable(s): ${missing.join(", ")}.`

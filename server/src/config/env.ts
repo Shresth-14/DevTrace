@@ -1,4 +1,6 @@
 import dotenv from "dotenv";
+import { readFileSync } from "node:fs";
+import { isAbsolute, resolve } from "node:path";
 
 dotenv.config();
 
@@ -29,6 +31,7 @@ export interface AppConfig {
   // OpenRouter AI Inference Configuration
   openrouterApiKey?: string;
   openrouterModel: string;
+  openrouterBaseUrl?: string;
 }
 
 /**
@@ -63,6 +66,57 @@ export function resolveConnectionUrl(
   return url
     .replace("${DB_PASSWORD}", encodeURIComponent(password))
     .replace("[YOUR-PASSWORD]", encodeURIComponent(password));
+}
+
+/**
+ * The GitHub App private key: the inline GITHUB_PRIVATE_KEY if set, otherwise the
+ * file named by GITHUB_PRIVATE_KEY_PATH (relative paths resolve from the server
+ * directory). The key itself is never logged.
+ */
+export function loadGithubPrivateKey(): string | undefined {
+  const inline = formatPrivateKey(process.env.GITHUB_PRIVATE_KEY);
+  if (inline) return inline;
+
+  const keyPath = process.env.GITHUB_PRIVATE_KEY_PATH?.trim();
+  if (!keyPath) return undefined;
+
+  const resolved = isAbsolute(keyPath)
+    ? keyPath
+    : resolve(process.cwd(), keyPath);
+  try {
+    return formatPrivateKey(readFileSync(resolved, "utf8"));
+  } catch {
+    console.warn(
+      `[Config] GITHUB_PRIVATE_KEY_PATH is set but the file could not be read: ${resolved}`
+    );
+    return undefined;
+  }
+}
+
+/**
+ * Caps Prisma's connection pool for this process. Prisma's default is
+ * (CPU cores * 2 + 1), which exceeds the 15-client limit of Supabase's session
+ * pooler on many machines and fails with EMAXCONNSESSION when queries run in
+ * parallel. An explicit `connection_limit` in DATABASE_URL always wins.
+ */
+export const DEFAULT_DB_POOL_SIZE = 5;
+
+export function withPoolLimit(url: string | undefined): string | undefined {
+  if (!url) return url;
+  try {
+    const parsed = new URL(url);
+    if (!parsed.searchParams.has("connection_limit")) {
+      const configured = parseInt(process.env.DATABASE_POOL_SIZE ?? "", 10);
+      const size =
+        Number.isInteger(configured) && configured > 0
+          ? configured
+          : DEFAULT_DB_POOL_SIZE;
+      parsed.searchParams.set("connection_limit", String(size));
+    }
+    return parsed.toString();
+  } catch {
+    return url;
+  }
 }
 
 /**
@@ -115,7 +169,7 @@ export function loadConfig(): AppConfig {
   const githubAppId = process.env.GITHUB_APP_ID || undefined;
   const githubClientId = process.env.GITHUB_CLIENT_ID || undefined;
   const githubClientSecret = process.env.GITHUB_CLIENT_SECRET || undefined;
-  const githubPrivateKey = formatPrivateKey(process.env.GITHUB_PRIVATE_KEY);
+  const githubPrivateKey = loadGithubPrivateKey();
   const githubCallbackUrl =
     process.env.GITHUB_CALLBACK_URL ||
     "http://localhost:5001/api/github/callback";
@@ -134,6 +188,9 @@ export function loadConfig(): AppConfig {
   const openrouterModel =
     process.env.OPENROUTER_MODEL?.trim() ||
     "nvidia/nemotron-3-ultra-550b-a55b:free";
+
+  const openrouterBaseUrl =
+    process.env.OPENROUTER_BASE_URL?.trim() || undefined;
 
   return {
     port,
@@ -156,6 +213,7 @@ export function loadConfig(): AppConfig {
     encryptionSecret,
     openrouterApiKey,
     openrouterModel,
+    openrouterBaseUrl,
   };
 }
 

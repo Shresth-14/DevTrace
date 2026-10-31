@@ -187,7 +187,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <div className="flex items-center gap-2.5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={user.avatarUrl}
+                src={user.avatarUrl ?? `https://github.com/${user.username}.png`}
                 alt={user.username}
                 className="w-7 h-7 rounded-full ring-1 ring-[#38462F]/20"
               />
@@ -342,7 +342,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <div className="flex items-center gap-2.5 min-w-0">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={user.avatarUrl}
+                src={user.avatarUrl ?? `https://github.com/${user.username}.png`}
                 alt={user.username}
                 className="w-8 h-8 rounded-full ring-1 ring-[#38462F]/20 shrink-0"
               />

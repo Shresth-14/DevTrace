@@ -12,11 +12,7 @@ import {
 } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { api, ProjectDto } from "@/lib/api";
-import {
-  INITIAL_MOCK_PROJECTS,
-  MOCK_AVAILABLE_REPOSITORIES,
-} from "@/data/mock-projects";
+import { api, type ProjectDto } from "@/lib/api";
 import {
   ArrowLeft,
   Check,
@@ -33,7 +29,6 @@ import {
   Lock,
   MessageSquare,
   MoreHorizontal,
-  RotateCw,
   UserCheck,
   XCircle,
   type LucideIcon,
@@ -41,15 +36,13 @@ import {
 import type {
   CodeRelationship,
   DecisionRecord,
+  OverviewData,
+  PrIntelligenceItem,
   ProjectTab,
   RejectedApproach,
-  SourceWithRefs,
+  SourceCategory,
+  SourceFeedItem,
 } from "@/components/project/types";
-import {
-  SAMPLE_ACTIVITY,
-  SAMPLE_DECISIONS,
-  SAMPLE_PRS,
-} from "@/components/project/sample-data";
 import { FOCUS } from "@/components/project/ui";
 import { OverviewSection } from "@/components/project/OverviewSection";
 import {
@@ -57,12 +50,10 @@ import {
   type StatusFilter,
 } from "@/components/project/DecisionsSection";
 import { RejectedSection } from "@/components/project/RejectedSection";
-import {
-  SourcesSection,
-  type SourceFilter,
-} from "@/components/project/SourcesSection";
+import { SourcesSection } from "@/components/project/SourcesSection";
 import { CodeSection } from "@/components/project/CodeSection";
 import { PrSection } from "@/components/project/PrSection";
+import { StatusPanel } from "@/components/project/StatusPanel";
 
 const TABS: { id: ProjectTab; label: string; icon: LucideIcon }[] = [
   { id: "overview", label: "Overview", icon: Layers },
@@ -79,97 +70,176 @@ const secondaryButton = `inline-flex cursor-pointer items-center gap-1.5 rounded
 // Inner Project Workspace Component
 // ==========================================
 
+const errorText = (err: unknown, fallback: string): string =>
+  err instanceof Error ? err.message : fallback;
+
 function ProjectWorkspace() {
   const params = useParams();
-  const slug = (params?.slug as string) || "dev-trace";
+  const slug = (params?.slug as string) || "";
 
   const [loading, setLoading] = useState(true);
   const [project, setProject] = useState<ProjectDto | null>(null);
   const [isOwner, setIsOwner] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copiedUrl, setCopiedUrl] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [syncToast, setSyncToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [acting, setActing] = useState(false);
 
-  // Active navigation tab
+  const [overview, setOverview] = useState<OverviewData | null>(null);
+  const [decisions, setDecisions] = useState<DecisionRecord[]>([]);
+  const [dataError, setDataError] = useState<string | null>(null);
+
+  const [prState, setPrState] = useState<{
+    key: string;
+    items: PrIntelligenceItem[];
+    scanned: number;
+  } | null>(null);
+  const [prError, setPrError] = useState<{ key: string; message: string } | null>(null);
+
   const [currentTab, setCurrentTab] = useState<ProjectTab>("overview");
-  const tabRefs = useRef<Partial<Record<ProjectTab, HTMLButtonElement | null>>>(
-    {}
-  );
+  const tabRefs = useRef<Partial<Record<ProjectTab, HTMLButtonElement | null>>>({});
 
-  // Decision explorer filter states
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("ALL");
-  const [selectedDecisionId, setSelectedDecisionId] = useState<string>(
-    SAMPLE_DECISIONS[0]?.id ?? ""
-  );
+  const [selectedDecisionId, setSelectedDecisionId] = useState("");
 
-  // Source explorer search state
-  const [sourceSearch, setSourceSearch] = useState("");
-  const [sourceTypeFilter, setSourceTypeFilter] = useState<SourceFilter>("ALL");
-
-  // Code relationship search state
   const [codeSearch, setCodeSearch] = useState("");
 
+  // Sources are fetched from the API per type / search, not derived from decisions.
+  const [sourceSearch, setSourceSearch] = useState("");
+  const [sourceDebounced, setSourceDebounced] = useState("");
+  const [sourceCategory, setSourceCategory] = useState<SourceCategory>("all");
+  const [sourcePaging, setSourcePaging] = useState<{ key: string; page: number } | null>(null);
+  const [sourceResult, setSourceResult] = useState<{
+    key: string;
+    page: number;
+    items: SourceFeedItem[];
+    counts: Record<SourceCategory, number>;
+    hasMore: boolean;
+  } | null>(null);
+  const [sourceError, setSourceError] = useState<{ key: string; message: string } | null>(null);
+
+  const showToast = useCallback((message: string) => {
+    setToast(message);
+    setTimeout(() => setToast(null), 4000);
+  }, []);
+
+  // --- project -----------------------------------------------------------
   useEffect(() => {
     if (!slug) return;
-
-    const fetchProject = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const { project: p, isOwner: owner } = await api.getProjectBySlug(slug);
+    let live = true;
+    api
+      .getProjectBySlug(slug)
+      .then(({ project: p, isOwner: owner }) => {
+        if (!live) return;
         setProject(p);
         setIsOwner(owner);
-      } catch (err) {
-        // Fall back to matching mock repository
-        const mockMatch =
-          INITIAL_MOCK_PROJECTS.find(
-            (p) => p.slug === slug || p.name === slug
-          ) ||
-          MOCK_AVAILABLE_REPOSITORIES.find(
-            (r) =>
-              r.name === slug ||
-              r.name.toLowerCase().replace(/[^a-z0-9-]/g, "-") === slug
-          );
-
-        if (mockMatch) {
-          const mockDto: ProjectDto = {
-            id: mockMatch.id,
-            name: mockMatch.name,
-            slug: slug,
-            description: mockMatch.description,
-            githubRepoFullName: mockMatch.fullName,
-            githubRepoUrl:
-              "githubUrl" in mockMatch
-                ? mockMatch.githubUrl
-                : `https://github.com/${mockMatch.fullName}`,
-            defaultBranch: mockMatch.defaultBranch,
-            isPrivate: mockMatch.isPrivate,
-            primaryLanguage: mockMatch.primaryLanguage,
-            url:
-              typeof window !== "undefined"
-                ? window.location.href
-                : `/p/${slug}`,
-            createdAt: new Date().toISOString(),
-          };
-          setProject(mockDto);
-          setIsOwner(true);
-        } else {
-          setError(
-            err instanceof Error
-              ? err.message
-              : "Failed to load project details."
-          );
-        }
-      } finally {
-        setLoading(false);
-      }
+      })
+      .catch((err: unknown) => {
+        if (live) setError(errorText(err, "Failed to load project details."));
+      })
+      .finally(() => {
+        if (live) setLoading(false);
+      });
+    return () => {
+      live = false;
     };
-
-    fetchProject();
   }, [slug]);
+
+  // --- overview + decisions (re-polled while work is running) -------------------
+  const [dataTick, setDataTick] = useState(0);
+  const loadData = useCallback(() => setDataTick((n) => n + 1), []);
+
+  const projectReady = project !== null;
+  useEffect(() => {
+    if (!projectReady || !slug) return;
+    let live = true;
+    Promise.all([api.getOverview(slug), api.getDecisions(slug)])
+      .then(([ov, decs]) => {
+        if (!live) return;
+        setOverview(ov);
+        setDecisions(decs);
+        setDataError(null);
+      })
+      .catch((err: unknown) => {
+        if (live) setDataError(errorText(err, "Could not load this project's data."));
+      });
+    return () => {
+      live = false;
+    };
+  }, [projectReady, slug, dataTick]);
+
+  const running =
+    overview?.status.syncStatus === "running" ||
+    overview?.status.syncStatus === "queued" ||
+    overview?.status.aiStatus === "running";
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => setDataTick((n) => n + 1), 2500);
+    return () => clearInterval(t);
+  }, [running]);
+
+  // Derived tabs are re-fetched whenever an import or analysis completes.
+  const finishedKey = `${overview?.status.lastSyncedAt ?? ""}|${overview?.status.lastExtractedAt ?? ""}`;
+
+  // --- PR intelligence (lazy) -----------------------------------------------
+  const prData = prState?.key === finishedKey ? prState : null;
+  const prFailure = prError?.key === finishedKey ? prError.message : null;
+  useEffect(() => {
+    if (currentTab !== "pr-intelligence" || !projectReady || prData || prFailure) return;
+    let live = true;
+    api
+      .getPrIntelligence(slug)
+      .then((r) => {
+        if (live) setPrState({ key: finishedKey, items: r.items, scanned: r.scanned });
+      })
+      .catch((err: unknown) => {
+        if (live) {
+          setPrError({ key: finishedKey, message: errorText(err, "Could not load pull request matches.") });
+        }
+      });
+    return () => {
+      live = false;
+    };
+  }, [currentTab, projectReady, slug, finishedKey, prData, prFailure]);
+
+  // --- Sources (lazy, server-side filter/search/pagination) --------------------
+  useEffect(() => {
+    const t = setTimeout(() => setSourceDebounced(sourceSearch.trim()), 300);
+    return () => clearTimeout(t);
+  }, [sourceSearch]);
+
+  const sourceKey = `${sourceCategory}|${sourceDebounced}|${finishedKey}`;
+  const sourcePage = sourcePaging?.key === sourceKey ? sourcePaging.page : 1;
+  useEffect(() => {
+    if (currentTab !== "sources" || !projectReady) return;
+    let live = true;
+    api
+      .getSourceFeed(slug, { category: sourceCategory, q: sourceDebounced || undefined, page: sourcePage })
+      .then((r) => {
+        if (!live) return;
+        setSourceResult((prev) => ({
+          key: sourceKey,
+          page: sourcePage,
+          items: sourcePage > 1 && prev?.key === sourceKey ? [...prev.items, ...r.items] : r.items,
+          counts: r.counts,
+          hasMore: r.hasMore,
+        }));
+        setSourceError(null);
+      })
+      .catch((err: unknown) => {
+        if (live) setSourceError({ key: sourceKey, message: errorText(err, "Could not load sources.") });
+      });
+    return () => {
+      live = false;
+    };
+  }, [currentTab, projectReady, slug, sourceCategory, sourceDebounced, sourcePage, sourceKey]);
+
+  const sourceCurrent = sourceResult?.key === sourceKey ? sourceResult : null;
+  const sourceFailure = sourceError?.key === sourceKey ? sourceError.message : null;
+  const sourceLoading =
+    !sourceFailure && (!sourceCurrent || sourceCurrent.page < sourcePage);
 
   const copyUrl = () => {
     if (typeof window !== "undefined") {
@@ -179,19 +249,23 @@ function ProjectWorkspace() {
     }
   };
 
-  const handleSyncNow = () => {
-    setSyncing(true);
-    setActionsOpen(false);
-    setTimeout(() => {
-      setSyncing(false);
-      setSyncToast("Sync isn't connected to the backend yet, so nothing was changed.");
-      setTimeout(() => setSyncToast(null), 3500);
-    }, 700);
+  const act = async (work: () => Promise<unknown>, started: string) => {
+    setActing(true);
+    try {
+      await work();
+      showToast(started);
+      loadData();
+    } catch (err) {
+      showToast(errorText(err, "That action could not be started."));
+    } finally {
+      setActing(false);
+    }
   };
+  const handleSync = () => act(() => api.startSync(slug), "GitHub import started.");
+  const handleExtract = (force: boolean) =>
+    act(() => api.startExtraction(slug, force), force ? "Re-analysing all discussions." : "Analysis started.");
 
-  // Sample content: the client API has no endpoint for these records yet.
-  const decisions: DecisionRecord[] = SAMPLE_DECISIONS;
-
+  // --- derived views ------------------------------------------------------------
   const filteredDecisions = useMemo(() => {
     const q = searchQuery.toLowerCase();
     return decisions.filter((d) => {
@@ -200,67 +274,30 @@ function ProjectWorkspace() {
         d.title.toLowerCase().includes(q) ||
         d.summary.toLowerCase().includes(q) ||
         d.codeFiles.some((f) => f.path.toLowerCase().includes(q));
-      const matchesStatus = statusFilter === "ALL" || d.status === statusFilter;
-      return matchesSearch && matchesStatus;
+      return matchesSearch && (statusFilter === "ALL" || d.status === statusFilter);
     });
   }, [decisions, searchQuery, statusFilter]);
 
   const activeDecision =
-    filteredDecisions.find((d) => d.id === selectedDecisionId) ??
-    filteredDecisions[0] ??
-    null;
+    filteredDecisions.find((d) => d.id === selectedDecisionId) ?? filteredDecisions[0] ?? null;
 
-  // Alternatives that a decision explicitly records as rejected
+  // Only alternatives the discussion explicitly rejected (never open disagreements).
   const rejectedApproaches = useMemo<RejectedApproach[]>(
     () =>
       decisions.flatMap((d) =>
-        d.rejectedAlternative
-          ? [
-              {
-                decisionId: d.id,
-                decisionTitle: d.title,
-                status: d.status,
-                date: d.date,
-                alternative: d.rejectedAlternative,
-              },
-            ]
-          : []
+        d.alternatives
+          .filter((a) => a.status === "REJECTED")
+          .map((alternative) => ({
+            decisionId: d.id,
+            decisionTitle: d.title,
+            status: d.status,
+            date: d.date,
+            alternative,
+          }))
       ),
     [decisions]
   );
 
-  // Unique sources across decisions, with the decisions that cite them
-  const allSources = useMemo<SourceWithRefs[]>(() => {
-    const list: SourceWithRefs[] = [];
-    decisions.forEach((d) => {
-      d.sources.forEach((s) => {
-        const existing = list.find((item) => item.id === s.id);
-        if (existing) {
-          if (!existing.referencedDecisions.includes(d.id)) {
-            existing.referencedDecisions.push(d.id);
-          }
-        } else {
-          list.push({ ...s, referencedDecisions: [d.id] });
-        }
-      });
-    });
-    return list;
-  }, [decisions]);
-
-  const filteredSources = useMemo(() => {
-    const q = sourceSearch.toLowerCase();
-    return allSources.filter((s) => {
-      const matchesSearch =
-        s.title.toLowerCase().includes(q) ||
-        s.author.toLowerCase().includes(q) ||
-        s.quote.toLowerCase().includes(q);
-      const matchesType =
-        sourceTypeFilter === "ALL" || s.type === sourceTypeFilter;
-      return matchesSearch && matchesType;
-    });
-  }, [allSources, sourceSearch, sourceTypeFilter]);
-
-  // Unique code files across decisions
   const allCodeRelationships = useMemo<CodeRelationship[]>(() => {
     const fileMap = new Map<string, CodeRelationship>();
     decisions.forEach((d) => {
@@ -270,12 +307,15 @@ function ProjectWorkspace() {
         if (!existing) {
           fileMap.set(f.path, {
             path: f.path,
+            previousPath: f.previousPath,
             lines: f.lines,
             description: f.description,
+            relationship: f.relationship,
             decisions: [entry],
           });
-        } else if (!existing.decisions.some((dec) => dec.id === d.id)) {
-          existing.decisions.push(entry);
+        } else {
+          if (f.relationship === "direct") existing.relationship = "direct";
+          if (!existing.decisions.some((x) => x.id === d.id)) existing.decisions.push(entry);
         }
       });
     });
@@ -283,22 +323,24 @@ function ProjectWorkspace() {
   }, [decisions]);
 
   const filteredCodeFiles = useMemo(
-    () =>
-      allCodeRelationships.filter((f) =>
-        f.path.toLowerCase().includes(codeSearch.toLowerCase())
-      ),
+    () => allCodeRelationships.filter((f) => f.path.toLowerCase().includes(codeSearch.toLowerCase())),
     [allCodeRelationships, codeSearch]
   );
 
+  const importedTotal = overview
+    ? Object.entries(overview.sources)
+        .filter(([k]) => k !== "files" && k !== "prFiles")
+        .reduce((n, [, v]) => n + v, 0)
+    : undefined;
+
   const tabCount: Partial<Record<ProjectTab, number>> = {
-    decisions: decisions.length,
-    rejected: rejectedApproaches.length,
-    sources: allSources.length,
-    code: allCodeRelationships.length,
-    "pr-intelligence": SAMPLE_PRS.length,
+    decisions: overview?.counts.total,
+    rejected: overview ? rejectedApproaches.length : undefined,
+    sources: importedTotal,
+    code: overview ? allCodeRelationships.length : undefined,
+    "pr-intelligence": prData?.items.length,
   };
 
-  // Jump to a decision from any section, clearing filters that could hide it
   const openDecision = useCallback((id: string) => {
     setSelectedDecisionId(id);
     setSearchQuery("");
@@ -368,7 +410,7 @@ function ProjectWorkspace() {
   return (
     <div className="flex min-h-screen flex-col bg-dt-bg font-sans text-dt-ink selection:bg-dt-sage-pale">
       {/* Toast feedback */}
-      {syncToast && (
+      {toast && (
         <div
           role="status"
           className="fixed bottom-6 right-4 z-50 flex max-w-sm items-center gap-2.5 rounded-xl bg-dt-ink-strong p-4 text-sm font-medium text-dt-bg shadow-xl sm:right-6"
@@ -377,7 +419,7 @@ function ProjectWorkspace() {
             className="h-4 w-4 shrink-0 text-dt-pistachio"
             aria-hidden="true"
           />
-          <span>{syncToast}</span>
+          <span>{toast}</span>
         </div>
       )}
 
@@ -494,28 +536,11 @@ function ProjectWorkspace() {
             </ul>
 
             <p className="max-w-2xl text-sm leading-relaxed text-dt-ink">
-              {project.description ||
-                "Technical decision memory and architectural invariant workspace."}
+              {project.description || "No description on GitHub."}
             </p>
           </div>
 
           <div className="flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={handleSyncNow}
-              disabled={syncing}
-              className={`${secondaryButton} disabled:cursor-wait disabled:opacity-70`}
-              title="Trigger webhook synchronization check"
-            >
-              <RotateCw
-                className={`h-3.5 w-3.5 text-dt-muted-text ${
-                  syncing ? "animate-spin motion-reduce:animate-none" : ""
-                }`}
-                aria-hidden="true"
-              />
-              <span>{syncing ? "Syncing…" : "Sync context"}</span>
-            </button>
-
             <div
               className="relative"
               onKeyDown={(e) => {
@@ -634,14 +659,30 @@ function ProjectWorkspace() {
 
       {/* Workspace body */}
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-20 pt-8 sm:px-6 sm:pt-10">
-        <p
-          role="note"
-          className="mb-8 max-w-2xl border-l-2 border-dt-pistachio pl-3 text-xs leading-relaxed text-dt-muted-text"
-        >
-          Decisions, sources, code links and pull-request matches shown here are
-          sample data bundled with the app. They are not loaded from this
-          repository yet.
-        </p>
+        {overview ? (
+          <div className="mb-8">
+            <StatusPanel
+              status={overview.status}
+              isOwner={isOwner}
+              busy={acting}
+              onSync={handleSync}
+              onExtract={handleExtract}
+            />
+          </div>
+        ) : null}
+
+        {dataError ? (
+          <div role="alert" className="mb-8 flex items-center justify-between gap-4 rounded-xl border border-dt-reject/30 bg-dt-reject-bg px-4 py-3 text-sm text-dt-reject">
+            <span>{dataError}</span>
+            <button
+              type="button"
+              onClick={loadData}
+              className={`cursor-pointer rounded-lg border border-dt-reject/40 px-3 py-1 text-xs font-medium ${FOCUS}`}
+            >
+              Try again
+            </button>
+          </div>
+        ) : null}
 
         <div
           key={currentTab}
@@ -651,18 +692,21 @@ function ProjectWorkspace() {
           tabIndex={0}
           className={`dt-fade rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-dt-forest`}
         >
-          {currentTab === "overview" && (
-            <OverviewSection
-              decisions={decisions}
-              rejectedApproaches={rejectedApproaches}
-              sources={allSources}
-              codeRelationships={allCodeRelationships}
-              prs={SAMPLE_PRS}
-              activity={SAMPLE_ACTIVITY}
-              onOpenDecision={openDecision}
-              onNavigate={setCurrentTab}
-            />
-          )}
+          {currentTab === "overview" &&
+            (overview ? (
+              <OverviewSection
+                overview={overview}
+                decisions={decisions}
+                codeRelationships={allCodeRelationships}
+                onOpenDecision={openDecision}
+                onNavigate={setCurrentTab}
+              />
+            ) : dataError ? null : (
+              <p role="status" className="flex items-center gap-2 text-sm text-dt-muted-text">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                Loading project data…
+              </p>
+            ))}
 
           {currentTab === "decisions" && (
             <DecisionsSection
@@ -686,12 +730,16 @@ function ProjectWorkspace() {
 
           {currentTab === "sources" && (
             <SourcesSection
-              sources={allSources}
-              filtered={filteredSources}
+              items={sourceCurrent?.items ?? []}
+              counts={sourceCurrent?.counts ?? sourceResult?.counts ?? null}
+              category={sourceCategory}
+              onCategoryChange={setSourceCategory}
               search={sourceSearch}
               onSearchChange={setSourceSearch}
-              typeFilter={sourceTypeFilter}
-              onTypeFilterChange={setSourceTypeFilter}
+              loading={sourceLoading}
+              error={sourceFailure}
+              hasMore={sourceCurrent?.hasMore ?? false}
+              onLoadMore={() => setSourcePaging({ key: sourceKey, page: sourcePage + 1 })}
               onOpenDecision={openDecision}
             />
           )}
@@ -706,13 +754,24 @@ function ProjectWorkspace() {
             />
           )}
 
-          {currentTab === "pr-intelligence" && (
-            <PrSection
-              prs={SAMPLE_PRS}
-              decisions={decisions}
-              onOpenDecision={openDecision}
-            />
-          )}
+          {currentTab === "pr-intelligence" &&
+            (prFailure ? (
+              <p role="alert" className="text-sm text-dt-reject">
+                {prFailure}
+              </p>
+            ) : prData ? (
+              <PrSection
+                prs={prData.items}
+                scanned={prData.scanned}
+                decisions={decisions}
+                onOpenDecision={openDecision}
+              />
+            ) : (
+              <p role="status" className="flex items-center gap-2 text-sm text-dt-muted-text">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                Matching pull requests to decisions…
+              </p>
+            ))}
         </div>
       </main>
     </div>
@@ -722,6 +781,12 @@ function ProjectWorkspace() {
 // ==========================================
 // Root Page Component with Suspense
 // ==========================================
+
+/** Keyed by slug so navigating between projects starts from a clean state. */
+function KeyedWorkspace() {
+  const slug = (useParams()?.slug as string) || "";
+  return <ProjectWorkspace key={slug} />;
+}
 
 export default function ProjectPage() {
   return (
@@ -738,7 +803,7 @@ export default function ProjectPage() {
         </div>
       }
     >
-      <ProjectWorkspace />
+      <KeyedWorkspace />
     </Suspense>
   );
 }

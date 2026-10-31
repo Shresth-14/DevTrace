@@ -29,6 +29,9 @@ export class OpenRouterService {
     if (apiKey) {
       this.client = new OpenRouter({
         apiKey,
+        ...(config.openrouterBaseUrl
+          ? { serverURL: config.openrouterBaseUrl }
+          : {}),
         httpReferer: "https://devtrace.io",
         appTitle: "Dev Trace",
       });

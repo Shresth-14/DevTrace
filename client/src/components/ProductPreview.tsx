@@ -109,7 +109,7 @@ export function ProductPreview() {
         <div className="max-w-3xl">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#E4DDCA] border border-[#CCC2AC] mb-4">
             <span className="text-[11px] font-mono tracking-wider uppercase text-[#2B3523] font-bold">
-              Interactive Dashboard
+              Illustrative preview · example data, not a real repository
             </span>
           </div>
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-extrabold tracking-tight text-[#22291D] leading-[1.18]">
