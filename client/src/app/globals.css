@@ -32,3 +32,50 @@ pre,
 .font-mono {
   font-family: var(--font-geist-mono), monospace;
 }
+
+/* Project workspace tokens (palette from the Dev Trace identity) */
+@theme {
+  --color-dt-bg: #f7f5ed;
+  --color-dt-bg2: #eae6d8;
+  --color-dt-surface: #ffffff;
+  --color-dt-sage-pale: #dce6d3;
+  --color-dt-pistachio: #c5d6b4;
+  --color-dt-sage: #9baf8b;
+  --color-dt-ink: #41463b;
+  --color-dt-ink-strong: #2d3327;
+  --color-dt-muted: #77796f;
+  /* #77796f is ~4.0:1 on the ivory background; small text uses this darker step (>=4.5:1) */
+  --color-dt-muted-text: #666a5d;
+  --color-dt-line: #e3dfd0;
+  --color-dt-line-strong: #d6cfbf;
+  --color-dt-forest: #35432c;
+  --color-dt-forest-dark: #283421;
+  --color-dt-accept: #4e673d;
+  --color-dt-reject: #9e3426;
+  --color-dt-reject-bg: #f6e6e1;
+  --color-dt-unresolved: #7a5200;
+  --color-dt-unresolved-bg: #f6ebcb;
+}
+
+.dt-scroll-none {
+  scrollbar-width: none;
+}
+.dt-scroll-none::-webkit-scrollbar {
+  display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes dt-fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+  .dt-fade {
+    animation: dt-fade-in 180ms ease-out both;
+  }
+}
