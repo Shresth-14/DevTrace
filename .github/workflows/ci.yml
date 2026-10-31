@@ -1,0 +1,69 @@
+name: DevTrace CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend CI - Express
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install backend dependencies
+        run: npm ci
+        working-directory: server
+
+      - name: Run backend typecheck
+        run: npm run typecheck
+        working-directory: server
+
+      - name: Run backend tests
+        run: npm test
+        working-directory: server
+
+      - name: Build backend
+        run: npm run build
+        working-directory: server
+
+  frontend:
+    name: Frontend CI - Next.js
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: client
+
+      - name: Run frontend lint
+        run: npm run lint
+        working-directory: client
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: client
