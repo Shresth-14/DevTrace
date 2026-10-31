@@ -1,5 +1,6 @@
 "use client";
 
+import { LogoMark } from "@/components/LogoMark";
 import { useState } from "react";
 import {
   Search,
@@ -128,7 +129,7 @@ export function ProductPreview() {
           <div className="px-6 py-4 bg-[#F6F1E6] border-b border-[#DDD4C2] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-[#2A3324] text-white flex items-center justify-center font-bold text-xs">
-                DT
+                <LogoMark />
               </div>
               <div>
                 <div className="flex items-center gap-2">

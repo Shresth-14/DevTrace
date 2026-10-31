@@ -1,5 +1,6 @@
 "use client";
 
+import { LogoMark } from "@/components/LogoMark";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Menu, X, ArrowUpRight, LogOut, GitBranch } from "lucide-react";
@@ -54,20 +55,7 @@ export function Navbar() {
           className="flex items-center gap-2.5 group focus:outline-none"
         >
           <div className="w-8 h-8 rounded-lg bg-[#2D3627] text-[#FAF8F3] flex items-center justify-center font-bold text-xs tracking-tight shadow-xs transition-transform group-hover:scale-[1.02]">
-            <svg
-              className="w-4.5 h-4.5 text-[#B6D2A3]"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="6" cy="6" r="3" />
-              <circle cx="18" cy="18" r="3" />
-              <path d="M9 9l6 6" />
-              <path d="M15 6h3v3" />
-            </svg>
+            <LogoMark />
           </div>
           <span className="font-bold text-base tracking-tight text-[#283022]">
             Dev Trace
