@@ -2,7 +2,7 @@
 
 import React from "react";
 import { useDashboard } from "@/context/DashboardContext";
-import { CheckCircle2, AlertCircle, ExternalLink } from "lucide-react";
+import { CheckCircle2, ExternalLink } from "lucide-react";
 
 export default function DashboardIntegrationsPage() {
   const { user } = useDashboard();
@@ -61,21 +61,6 @@ export default function DashboardIntegrationsPage() {
               </a>
             </div>
           </div>
-        </div>
-
-        <div className="p-6 rounded-2xl bg-white border border-[#DDD8CC] shadow-xs">
-          <div className="flex items-center gap-2.5">
-            <h3 className="text-base font-bold text-[#41463B]">Discord</h3>
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#EAE6D8] text-[#77796F] text-xs font-semibold">
-              <AlertCircle className="w-3.5 h-3.5" />
-              Not available yet
-            </span>
-          </div>
-          <p className="text-xs text-[#77796F] mt-2 max-w-lg leading-relaxed">
-            A standalone Discord collector exists in the repository, but it is
-            not connected to this app yet, so Discord discussions are not
-            imported and cannot be connected from here.
-          </p>
         </div>
       </div>
     </div>

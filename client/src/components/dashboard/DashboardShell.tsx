@@ -223,9 +223,6 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 <span className="font-bold text-base tracking-tight text-[#283022]">
                   Dev Trace
                 </span>
-                <span className="text-[10px] text-[#77796F] -mt-1 font-mono">
-                  Maintainer Suite
-                </span>
               </div>
             </Link>
           </div>

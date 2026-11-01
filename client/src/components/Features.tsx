@@ -97,7 +97,7 @@ export function Features() {
                   <span>Verified Citation</span>
                 </div>
                 <span className="text-[10px] font-mono text-[#35432C] bg-[#DCE6D3] px-2 py-0.5 rounded">
-                  Discord #architecture
+                  Issue #142
                 </span>
               </div>
               <p className="text-xs italic text-[#555A4D] bg-[#F7F5ED] p-3 rounded-lg border border-[#EAE4D5] leading-relaxed">

@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Dev Trace — Understand the why behind every line of code",
   description:
-    "The memory layer for software teams. Dev Trace connects GitHub and Discord discussions to preserve the technical decisions behind your codebase.",
+    "The memory layer for software teams. Dev Trace connects GitHub issues, pull requests and discussions to preserve the technical decisions behind your codebase.",
   icons: { icon: "/assets/devtracelogo.svg" },
 };
 

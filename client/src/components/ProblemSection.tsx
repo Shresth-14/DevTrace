@@ -114,7 +114,7 @@ export function ProblemSection() {
                   Adopted session mode over transaction mode because Prisma prepared statements required persistent session affinity during automated schema migrations.
                 </p>
                 <div className="pt-2 flex items-center justify-between text-[11px] font-mono text-[#5A684E] border-t border-[#F2ECE0]">
-                  <span>Linked: PR #42 · Discord #infra · env.ts:L14</span>
+                  <span>Linked: PR #42 · Issue #31 · env.ts:L14</span>
                   <span className="flex items-center gap-1 font-semibold hover:underline cursor-pointer">
                     Trace <ArrowRight className="w-3 h-3" />
                   </span>

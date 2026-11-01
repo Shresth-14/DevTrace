@@ -58,7 +58,7 @@ export function Hero() {
 
           {/* Subtitle with better spacing */}
           <p className="mt-6 text-base sm:text-lg text-[#6F7365] leading-relaxed max-w-2xl font-normal">
-            Dev Trace preserves the technical decisions behind your code, connecting pull requests, RFC debates, and Discord discussions directly to the files they shaped.
+            Dev Trace preserves the technical decisions behind your code, connecting issues, pull requests, and review threads directly to the files they shaped.
           </p>
 
           {/* Action CTAs */}
@@ -118,11 +118,11 @@ export function Hero() {
             </span>
             <span className="flex items-center gap-1.5">
               <CheckCircle2 className="w-3.5 h-3.5 text-[#4E673D]" />
-              Official GitHub App
+              Open-weight AI, runs locally
             </span>
             <span className="flex items-center gap-1.5">
               <CheckCircle2 className="w-3.5 h-3.5 text-[#4E673D]" />
-              Discord collector sync
+              Every decision cites its source
             </span>
           </div>
         </div>
@@ -267,7 +267,7 @@ export function Hero() {
                   <div className="space-y-3 text-xs">
                     <div className="p-3 bg-white rounded-lg border border-[#DDD8CC] space-y-1">
                       <div className="flex items-center justify-between text-[10px] font-mono text-[#77796F]">
-                        <span className="font-bold text-[#283022]">Discord #architecture</span>
+                        <span className="font-bold text-[#283022]">Issue #142</span>
                         <span>Oct 14</span>
                       </div>
                       <p className="italic text-[#41463B] text-[11px]">
@@ -296,7 +296,7 @@ export function Hero() {
                   <div className="p-4 rounded-xl bg-[#FAF8F3] border border-[#EAE4D5] space-y-2">
                     <div className="flex items-center gap-2 text-xs font-mono text-[#5A684E] font-bold">
                       <MessageSquare className="w-3.5 h-3.5" />
-                      <span>Discord #architecture</span>
+                      <span>Issue #142</span>
                     </div>
                     <p className="text-xs italic text-[#41463B] leading-relaxed">
                       &quot;Mongo seemed easier at first, but with decision graphs, we’ll end up writing manual joins. Postgres + Prisma is the clear winner.&quot;

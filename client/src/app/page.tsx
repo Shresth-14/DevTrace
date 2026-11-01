@@ -112,7 +112,7 @@ export default function Home() {
               </h3>
               <p className="text-xs text-[#77796F]">
                 {authModal === "signup"
-                  ? "Connect your GitHub and Discord workspaces to start preserving architectural context."
+                  ? "Connect your GitHub account to start preserving architectural context."
                   : "Access your repository decision history and technical memory layer."}
               </p>
             </div>
