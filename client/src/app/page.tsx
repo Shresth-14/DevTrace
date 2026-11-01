@@ -59,53 +59,25 @@ export default function Home() {
   };
 
   return (
-    <div className="lp-root flex min-h-screen flex-col font-sans selection:bg-lp-glow selection:text-lp-bg">
-      <div className="lp-aurora" aria-hidden="true" />
-      <div className="lp-grid" aria-hidden="true" />
-      <div className="lp-grain" aria-hidden="true" />
+    <div className="min-h-screen bg-[#F7F5ED] text-[#41463B] flex flex-col font-sans selection:bg-[#DCE6D3] selection:text-[#2E332A]">
       {/* 1. Navigation */}
       <Navbar />
 
       {/* Main Content */}
-      <main className="relative flex-1">
-        {/* The thread: drawn down the page as you scroll */}
-        <svg
-          className="lp-thread pointer-events-none absolute inset-0 -z-[1] hidden h-full w-full md:block"
-          viewBox="0 0 100 1000"
-          preserveAspectRatio="none"
-          aria-hidden="true"
-        >
-          <defs>
-            <linearGradient id="lp-thread-grad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="#d3f08a" stopOpacity="0" />
-              <stop offset="0.1" stopColor="#d3f08a" />
-              <stop offset="1" stopColor="#6f9a4c" />
-            </linearGradient>
-          </defs>
-          <path
-            className="lp-thread-base"
-            d="M7 0 C7 140 3 220 6 340 S11 520 6 660 S2 840 7 1000"
-            fill="none"
-            strokeWidth="1"
-            vectorEffect="non-scaling-stroke"
-          />
-          <path
-            className="lp-thread-live"
-            d="M7 0 C7 140 3 220 6 340 S11 520 6 660 S2 840 7 1000"
-            pathLength={1}
-            fill="none"
-            stroke="url(#lp-thread-grad)"
-            strokeWidth="2"
-            strokeLinecap="round"
-            vectorEffect="non-scaling-stroke"
-            style={{ filter: "drop-shadow(0 0 6px rgb(211 240 138 / 0.7))" }}
-          />
-        </svg>
-
+      <main className="flex-1">
+        {/* 2. Hero Section */}
         <Hero />
+
+        {/* 3. Problem Section */}
         <ProblemSection />
+
+        {/* 4. How It Works */}
         <HowItWorks />
+
+        {/* 5. Features */}
         <Features />
+
+        {/* 6. Final CTA */}
         <FinalCta />
       </main>
 
@@ -117,28 +89,28 @@ export default function Home() {
         <div
           role="dialog"
           aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-150"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#41463B]/30 backdrop-blur-sm animate-in fade-in duration-150"
         >
-          <div className="lp-card w-full max-w-md space-y-6 p-6 text-lp-ink animate-in zoom-in-95 duration-150 sm:p-8">
+          <div className="bg-white rounded-2xl p-6 sm:p-8 max-w-md w-full border border-[#DDD8CC] shadow-2xl space-y-6 relative animate-in zoom-in-95 duration-150">
             <button
               onClick={closeModal}
               type="button"
-              className="absolute top-5 right-5 p-1.5 rounded-lg text-lp-mute hover:bg-white/10 hover:text-lp-ink transition-colors"
+              className="absolute top-5 right-5 p-1.5 rounded-lg text-[#77796F] hover:bg-[#FAF8F3] hover:text-[#41463B] transition-colors"
               aria-label="Close dialog"
             >
               <X className="w-4 h-4" />
             </button>
 
             <div className="space-y-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#2D3627] ring-1 ring-lp-glow/30">
+              <div className="w-8 h-8 rounded-lg bg-[#41463B] text-white flex items-center justify-center font-bold text-xs">
                 <LogoMark />
               </div>
-              <h3 className="text-xl font-semibold tracking-tight text-lp-ink">
+              <h3 className="text-xl font-bold tracking-tight text-[#41463B]">
                 {authModal === "signup"
                   ? "Create your Dev Trace account"
                   : "Welcome back to Dev Trace"}
               </h3>
-              <p className="text-xs text-lp-mute">
+              <p className="text-xs text-[#77796F]">
                 {authModal === "signup"
                   ? "Connect your GitHub and Discord workspaces to start preserving architectural context."
                   : "Access your repository decision history and technical memory layer."}
@@ -148,7 +120,7 @@ export default function Home() {
             <div className="space-y-4 pt-2">
               <a
                 href={api.getAuthUrl("/dashboard")}
-                className="flex w-full items-center justify-center gap-2.5 rounded-full bg-lp-glow px-4 py-3.5 text-xs font-semibold text-lp-bg transition-all hover:brightness-110"
+                className="w-full py-3.5 px-4 rounded-xl bg-[#35432C] hover:bg-[#283421] active:bg-[#1E2718] text-[#FAF8F3] font-semibold text-xs transition-colors border border-[#283421] shadow-sm flex items-center justify-center gap-2.5"
               >
                 <svg
                   className="w-4 h-4 fill-current"
@@ -165,19 +137,19 @@ export default function Home() {
                 <ArrowRight className="w-3.5 h-3.5" />
               </a>
 
-              <p className="text-center text-[11px] text-lp-mute">
+              <p className="text-center text-[11px] text-[#77796F]">
                 Redirects to GitHub for one-step app authorization &amp;
                 repository discovery.
               </p>
             </div>
 
-            <div className="pt-3 border-t border-lp-line space-y-1.5 text-[11px] text-lp-mute">
+            <div className="pt-3 border-t border-[#EFECE3] space-y-1.5 text-[11px] text-[#77796F]">
               <div className="flex items-center gap-1.5">
-                <ShieldCheck className="w-3.5 h-3.5 text-lp-glow" />
+                <ShieldCheck className="w-3.5 h-3.5 text-[#4E673D]" />
                 <span>Zero code modification needed</span>
               </div>
               <div className="flex items-center gap-1.5">
-                <CheckCircle2 className="w-3.5 h-3.5 text-lp-glow" />
+                <CheckCircle2 className="w-3.5 h-3.5 text-[#4E673D]" />
                 <span>Official GitHub App authorization</span>
               </div>
             </div>

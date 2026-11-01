@@ -1,35 +1,148 @@
+"use client";
+
 import { LogoMark } from "@/components/LogoMark";
 import Link from "next/link";
+import { ArrowUpRight } from "lucide-react";
 
 export function Footer() {
   return (
-    <footer className="border-t border-lp-line px-6 py-10 sm:px-8">
-      <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-6 text-sm text-lp-mute sm:flex-row">
-        <Link href="/" className="flex items-center gap-2.5 text-lp-ink">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-[#2D3627] ring-1 ring-lp-glow/30">
-            <LogoMark />
-          </span>
-          <span className="font-semibold tracking-tight">Dev Trace</span>
-        </Link>
+    <footer className="bg-[#F7F5ED] border-t border-[#E5E0D5] py-16 text-[#77796F] text-sm">
+      <div className="max-w-7xl mx-auto px-6 sm:px-8">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-10 pb-12 border-b border-[#EAE6D8]">
+          {/* Brand Info (2 cols) */}
+          <div className="md:col-span-2 space-y-4">
+            <Link href="/" className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-[#41463B] text-[#F7F5ED] flex items-center justify-center font-bold text-xs">
+                <LogoMark />
+              </div>
+              <span className="font-semibold text-base text-[#41463B]">
+                Dev Trace
+              </span>
+            </Link>
 
-        <nav aria-label="Footer" className="flex items-center gap-6">
-          <a
-            href="https://github.com/Shresth-14/DevTrace"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="transition-colors hover:text-lp-ink"
-          >
-            GitHub
-          </a>
-          <a href="#login" className="transition-colors hover:text-lp-ink">
-            Sign in
-          </a>
-          <a href="#signup" className="transition-colors hover:text-lp-ink">
-            Sign up
-          </a>
-        </nav>
+            <p className="text-sm text-[#77796F] max-w-sm leading-relaxed">
+              The memory layer for software teams. Preserving the why behind
+              every line of code by connecting discussions directly to
+              repositories.
+            </p>
 
-        <p className="font-mono text-xs">© 2026 Dev Trace · MIT licence</p>
+            <div className="text-xs font-mono text-[#77796F] pt-2">
+              Understand the why behind every line of code.
+            </div>
+          </div>
+
+          {/* Links: Platform */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-mono uppercase font-semibold text-[#41463B] tracking-wider">
+              Product
+            </h4>
+            <ul className="space-y-2.5 text-sm">
+              <li>
+                <a
+                  href="#product"
+                  className="hover:text-[#41463B] transition-colors"
+                >
+                  Overview
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#how-it-works"
+                  className="hover:text-[#41463B] transition-colors"
+                >
+                  How it works
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#features"
+                  className="hover:text-[#41463B] transition-colors"
+                >
+                  Features
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#documentation"
+                  className="hover:text-[#41463B] transition-colors"
+                >
+                  Documentation
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          {/* Links: Resources */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-mono uppercase font-semibold text-[#41463B] tracking-wider">
+              Ecosystem
+            </h4>
+            <ul className="space-y-2.5 text-sm">
+              <li>
+                <a
+                  href="https://github.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 hover:text-[#41463B] transition-colors"
+                >
+                  GitHub
+                  <ArrowUpRight className="w-3 h-3" />
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#documentation"
+                  className="hover:text-[#41463B] transition-colors"
+                >
+                  API Reference
+                </a>
+              </li>
+              <li>
+                <a
+                  href="#product"
+                  className="hover:text-[#41463B] transition-colors"
+                >
+                  Decision Schema
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          {/* Links: Account */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-mono uppercase font-semibold text-[#41463B] tracking-wider">
+              Access
+            </h4>
+            <ul className="space-y-2.5 text-sm">
+              <li>
+                <Link
+                  href="#login"
+                  className="hover:text-[#41463B] transition-colors"
+                >
+                  Log in
+                </Link>
+              </li>
+              <li>
+                <Link
+                  href="#signup"
+                  className="hover:text-[#41463B] transition-colors font-semibold text-[#41463B]"
+                >
+                  Sign up
+                </Link>
+              </li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Bottom bar */}
+        <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-[#77796F]">
+          <p>© 2026 Dev Trace. All rights reserved.</p>
+          <div className="flex items-center gap-6 font-mono text-[11px]">
+            <span>Privacy</span>
+            <span>Terms</span>
+            <span>Security</span>
+          </div>
+        </div>
       </div>
     </footer>
   );
