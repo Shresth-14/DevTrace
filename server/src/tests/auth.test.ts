@@ -16,7 +16,7 @@ async function runTests() {
 
   // 1. AES-256-GCM Encryption / Decryption
   console.log("\n[Test 1] Token AES-256-GCM Encryption & Decryption");
-  const sampleToken = "ghu_16CharSampleGitHubUserAccessTokenForTesting123";
+  const sampleToken = "sample-user-access-token-for-testing-only-123";
   const encrypted = encrypt(sampleToken);
   assert.notStrictEqual(
     encrypted,
