@@ -8,7 +8,7 @@ export function HowItWorks() {
       num: "01",
       tag: "Ingest",
       title: "Connect existing workspaces",
-      desc: "Install the official GitHub App, or paste a public repository URL. Zero code changes or CI configuration needed.",
+      desc: "Install the official GitHub App and invite the Discord collector with one click. Zero code changes or CI configuration needed.",
       visual: (
         <div className="p-4 rounded-xl bg-white border border-[#DDD8CC] text-xs space-y-2.5">
           <div className="flex items-center justify-between text-[11px] font-mono text-[#77796F] pb-2 border-b border-[#F2ECE0]">
@@ -23,8 +23,8 @@ export function HowItWorks() {
             <span className="text-[10px] font-mono bg-[#DCE6D3] text-[#2D3728] px-2 py-0.5 rounded">Synced</span>
           </div>
           <div className="flex items-center justify-between">
-            <span className="font-mono text-[#2D3327] font-semibold">issues + pull requests</span>
-            <span className="text-[10px] font-mono bg-[#DCE6D3] text-[#2D3728] px-2 py-0.5 rounded">Imported</span>
+            <span className="font-mono text-[#2D3327] font-semibold">discord: #architecture</span>
+            <span className="text-[10px] font-mono bg-[#DCE6D3] text-[#2D3728] px-2 py-0.5 rounded">Listening</span>
           </div>
         </div>
       ),

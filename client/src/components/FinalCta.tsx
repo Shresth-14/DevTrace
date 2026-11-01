@@ -80,7 +80,7 @@ export function FinalCta() {
           </span>
           <span className="flex items-center gap-1.5">
             <Check className="w-3.5 h-3.5 text-[#4E673D]" />
-            Open-weight AI, runs locally
+            Discord collector integration
           </span>
           <span className="flex items-center gap-1.5">
             <Check className="w-3.5 h-3.5 text-[#4E673D]" />
