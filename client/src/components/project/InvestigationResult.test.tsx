@@ -95,9 +95,9 @@ describe("InvestigationResult", () => {
   it("shows the reason when no summary could be produced, and still lists the conversation", () => {
     const r = base();
     r.summary = null;
-    r.summaryError = "OpenRouter's daily limit for free models is used up.";
+    r.summaryError = "Model daily limit reached.";
     render(<InvestigationResult result={r} />);
-    expect(screen.getByText(/daily limit for free models is used up\./)).toBeInTheDocument();
+    expect(screen.getByText(/Model daily limit reached\./)).toBeInTheDocument();
     expect(screen.getByText(/The full conversation is below/)).toBeInTheDocument();
     expect(screen.getByText(/Full conversation from GitHub \(2 messages\)/)).toBeInTheDocument();
   });

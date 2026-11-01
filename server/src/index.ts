@@ -2,6 +2,7 @@ import { createApp } from "./app";
 import { config } from "./config/env";
 import { prisma } from "./database";
 import { recoverInterruptedWork } from "./modules/project/recovery";
+import { aiService } from "./modules/ai/ai.service";
 
 const app = createApp();
 
@@ -26,6 +27,28 @@ const server = app.listen(config.port, () => {
   console.log(
     `[Dev Trace Server] Allowed client origin: ${config.clientOrigin}`
   );
+
+  aiService
+    .checkHealth()
+    .then((health) => {
+      const diag = health.diagnostics as
+        | { reachable?: boolean; modelInstalled?: boolean }
+        | undefined;
+      if (diag?.reachable && diag?.modelInstalled) {
+        console.log(
+          `[Dev Trace Server] AI: Ollama running with model '${health.model}' (${config.ollamaBaseUrl})`
+        );
+      } else if (diag?.reachable && !diag?.modelInstalled) {
+        console.warn(
+          `[Dev Trace Server] AI: Ollama is running at ${config.ollamaBaseUrl}, but model '${health.model}' is not installed. Run: ollama pull ${health.model}`
+        );
+      } else {
+        console.warn(
+          `[Dev Trace Server] AI: Ollama is not reachable at ${config.ollamaBaseUrl}. Ensure 'brew services start ollama' or 'ollama serve' is running.`
+        );
+      }
+    })
+    .catch(() => {});
 });
 
 const gracefulShutdown = (signal: string) => {

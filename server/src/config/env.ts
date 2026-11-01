@@ -28,10 +28,12 @@ export interface AppConfig {
   sessionSecret: string;
   encryptionSecret: string;
 
-  // OpenRouter AI Inference Configuration
-  openrouterApiKey?: string;
-  openrouterModel: string;
-  openrouterBaseUrl?: string;
+  // Local AI Configuration (Ollama)
+  aiProvider: "ollama";
+  ollamaBaseUrl: string;
+  ollamaModel: string;
+  ollamaContextLength: number;
+  ollamaTimeoutMs: number;
 }
 
 /**
@@ -183,14 +185,15 @@ export function loadConfig(): AppConfig {
     process.env.ENCRYPTION_SECRET ||
     "devtrace-aes-token-encryption-secret-32-chars-min";
 
-  // OpenRouter AI Inference
-  const openrouterApiKey = process.env.OPENROUTER_API_KEY?.trim() || undefined;
-  const openrouterModel =
-    process.env.OPENROUTER_MODEL?.trim() ||
-    "nvidia/nemotron-3-ultra-550b-a55b:free";
-
-  const openrouterBaseUrl =
-    process.env.OPENROUTER_BASE_URL?.trim() || undefined;
+  // Local AI (Ollama) Configuration
+  const aiProvider = "ollama" as const;
+  const ollamaBaseUrl =
+    process.env.OLLAMA_BASE_URL?.trim() || "http://localhost:11434";
+  const ollamaModel = process.env.OLLAMA_MODEL?.trim() || "qwen2.5-coder:7b";
+  const ollamaContextLength =
+    parseInt(process.env.OLLAMA_CONTEXT_LENGTH || "4096", 10) || 4096;
+  const ollamaTimeoutMs =
+    parseInt(process.env.OLLAMA_TIMEOUT_MS || "120000", 10) || 120000;
 
   return {
     port,
@@ -211,9 +214,11 @@ export function loadConfig(): AppConfig {
     githubAppSlug,
     sessionSecret,
     encryptionSecret,
-    openrouterApiKey,
-    openrouterModel,
-    openrouterBaseUrl,
+    aiProvider,
+    ollamaBaseUrl,
+    ollamaModel,
+    ollamaContextLength,
+    ollamaTimeoutMs,
   };
 }
 

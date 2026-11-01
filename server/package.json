@@ -25,7 +25,6 @@
     "prisma:studio": "prisma studio"
   },
   "dependencies": {
-    "@openrouter/sdk": "^1.5.33",
     "@prisma/client": "^6.19.3",
     "bottleneck": "^2.19.5",
     "cookie-parser": "^1.4.7",

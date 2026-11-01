@@ -4,7 +4,7 @@ import type { Octokit } from "octokit";
 import { prisma } from "../../database";
 import { requireAuth } from "../../middleware/auth";
 import { HttpError } from "../../utils/http-error";
-import { openRouterService } from "../ai/openrouter.service";
+import { aiService } from "../ai/ai.service";
 import { DecisionStore } from "../decisions/decision.store";
 import { PrismaSyncStore } from "../github/sync/github.sync.store";
 import { githubSyncService } from "../github/sync/github.sync.service";
@@ -23,7 +23,7 @@ export const investigationService = new InvestigationService({
   db: prismaInvestigationDb(prisma),
   store: new PrismaSyncStore(prisma),
   decisions: new DecisionStore(prisma),
-  llm: openRouterService,
+  llm: aiService,
 });
 
 export const questionService = new QuestionService(

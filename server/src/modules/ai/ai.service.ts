@@ -4,7 +4,7 @@ import {
   AiChatResponse,
   AiStreamChunk,
 } from "./ai.types";
-import { openRouterService } from "./openrouter.service";
+import { ollamaService, OllamaHealthResult } from "./ollama.service";
 
 export interface IAiProvider {
   name: string;
@@ -18,22 +18,46 @@ export interface IAiProvider {
     messages: ChatMessage[],
     options?: AiChatOptions
   ): AsyncGenerator<AiStreamChunk, void, unknown>;
+  checkHealth?(): Promise<OllamaHealthResult | Record<string, unknown>>;
 }
 
 export class AiService {
   private activeProvider: IAiProvider;
 
-  constructor(
-    provider: IAiProvider = openRouterService as unknown as IAiProvider
-  ) {
+  constructor(initialProvider?: IAiProvider) {
+    this.activeProvider = initialProvider ?? (ollamaService as unknown as IAiProvider);
+  }
+
+  /**
+   * Sets or swaps the active AI provider.
+   */
+  public setProvider(provider: IAiProvider): void {
     this.activeProvider = provider;
   }
 
   /**
-   * Sets or swaps the active AI provider (e.g. OpenRouter, Ollama, local model server).
+   * Switches provider by name: "ollama".
    */
-  public setProvider(provider: IAiProvider): void {
-    this.activeProvider = provider;
+  public setProviderByName(name: "ollama"): void {
+    if (name === "ollama") {
+      this.activeProvider = ollamaService as unknown as IAiProvider;
+    }
+  }
+
+  public getActiveProvider(): IAiProvider {
+    return this.activeProvider;
+  }
+
+  public getActiveProviderName(): string {
+    return this.activeProvider.name || "ollama";
+  }
+
+  public isConfigured(): boolean {
+    return this.activeProvider.isConfigured();
+  }
+
+  public getModel(): string {
+    return this.activeProvider.getModel();
   }
 
   /**
@@ -43,11 +67,40 @@ export class AiService {
     provider: string;
     configured: boolean;
     model: string;
+    availableProviders: string[];
   } {
     return {
-      provider: this.activeProvider.name || "openrouter",
+      provider: this.activeProvider.name || "ollama",
       configured: this.activeProvider.isConfigured(),
       model: this.activeProvider.getModel(),
+      availableProviders: ["ollama"],
+    };
+  }
+
+  /**
+   * Health check and diagnostics for the active provider.
+   */
+  public async checkHealth(): Promise<{
+    provider: string;
+    configured: boolean;
+    model: string;
+    diagnostics?: Record<string, unknown>;
+  }> {
+    const status = this.getStatus();
+    let diagnostics: Record<string, unknown> | undefined;
+
+    if (typeof this.activeProvider.checkHealth === "function") {
+      diagnostics = (await this.activeProvider.checkHealth()) as Record<
+        string,
+        unknown
+      >;
+    }
+
+    return {
+      provider: status.provider,
+      configured: status.configured,
+      model: status.model,
+      diagnostics,
     };
   }
 
@@ -114,9 +167,4 @@ export class AiService {
   }
 }
 
-// Add name property to OpenRouterService so it satisfies IAiProvider
-(openRouterService as unknown as { name: string }).name = "openrouter";
-
-export const aiService = new AiService(
-  openRouterService as unknown as IAiProvider
-);
+export const aiService = new AiService();

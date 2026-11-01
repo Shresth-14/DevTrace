@@ -123,7 +123,7 @@ export function StatusPanel({ status, isOwner, busy, onSync, onExtract }: Status
             : status.lastExtractedAt
               ? `Last analysed ${relativeTime(status.lastExtractedAt)}${run ? ` with ${run.model}` : ""}.`
               : status.aiStatus === "not_configured"
-                ? "Add OPENROUTER_API_KEY to server/.env to enable analysis."
+                ? "Configure Ollama in server/.env to enable analysis."
                 : "Waits for the GitHub import to finish."}
         </p>
         {analysing && run && run.unitsTotal > 0 ? (

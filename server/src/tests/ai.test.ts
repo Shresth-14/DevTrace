@@ -1,9 +1,8 @@
 import "./setup-env";
 import assert from "assert";
-import { openRouterService } from "../modules/ai/openrouter.service";
+import { ollamaService } from "../modules/ai/ollama.service";
 import { aiService, IAiProvider } from "../modules/ai/ai.service";
 import {
-  OpenRouterNotConfiguredError,
   AiChatResponse,
   AiStreamChunk,
   ChatMessage,
@@ -13,37 +12,27 @@ import { Server } from "http";
 
 async function runAiTests() {
   console.log("=========================================");
-  console.log("Dev Trace - OpenRouter AI Integration Tests");
+  console.log("Dev Trace - Local Ollama AI Integration Tests");
   console.log("=========================================");
 
-  // 1. Unconfigured OpenRouter Service Behavior
-  console.log("\n[Test 1] OpenRouter Unconfigured State & Safety");
+  // 1. Ollama Service Configuration & Defaults
+  console.log("\n[Test 1] Ollama Service Configuration");
   assert.strictEqual(
-    openRouterService.isConfigured(),
-    false,
-    "OpenRouter must report not configured when OPENROUTER_API_KEY is empty"
+    ollamaService.name,
+    "ollama",
+    "Ollama service must have name 'ollama'"
   );
   assert.strictEqual(
-    openRouterService.getModel(),
-    "nvidia/nemotron-3-ultra-550b-a55b:free",
-    "OpenRouter must default to nemotron free model"
+    ollamaService.getModel(),
+    "qwen2.5-coder:7b",
+    "Ollama must default to qwen2.5-coder:7b"
   );
-
-  let unconfiguredCaught = false;
-  try {
-    await openRouterService.chat([{ role: "user", content: "Test prompt" }]);
-  } catch (err) {
-    if (err instanceof OpenRouterNotConfiguredError) {
-      unconfiguredCaught = true;
-      assert.strictEqual(err.statusCode, 503);
-    }
-  }
   assert.strictEqual(
-    unconfiguredCaught,
-    true,
-    "Calling chat without API key must throw OpenRouterNotConfiguredError"
+    ollamaService.getBaseUrl(),
+    "http://localhost:11434",
+    "Ollama must default to http://localhost:11434"
   );
-  console.log("✓ OpenRouter unconfigured guard correctly throws 503 error.");
+  console.log("✓ Ollama service configuration verified.");
 
   // 2. AI Service message builder and provider abstraction
   console.log("\n[Test 2] AI Service Abstraction & Message Builder");
@@ -58,9 +47,9 @@ async function runAiTests() {
   assert.strictEqual(messages[1].content, "How many r's are in strawberry?");
   console.log("✓ System and user prompts correctly structured.");
 
-  // 3. Provider Pluggability (swapping to mock provider like Ollama)
+  // 3. Provider Pluggability (mock local provider simulation)
   console.log(
-    "\n[Test 3] Provider Swapping (Ollama / Local Server Simulation)"
+    "\n[Test 3] Provider Mock Execution & Pluggability"
   );
   class MockLocalProvider implements IAiProvider {
     public readonly name = "ollama";
@@ -68,12 +57,12 @@ async function runAiTests() {
       return true;
     }
     public getModel(): string {
-      return "llama3.2:latest";
+      return "qwen2.5-coder:7b";
     }
     public async chat(msgs: ChatMessage[]): Promise<AiChatResponse> {
       return {
         id: "mock_01",
-        model: "llama3.2:latest",
+        model: "qwen2.5-coder:7b",
         content: `Echo: ${msgs[msgs.length - 1].content}`,
         reasoning: "Step 1: count occurrences",
         finishReason: "stop",
@@ -90,12 +79,12 @@ async function runAiTests() {
     ): AsyncGenerator<AiStreamChunk, void, unknown> {
       yield {
         id: "mock_01",
-        model: "llama3.2:latest",
+        model: "qwen2.5-coder:7b",
         content: "Echo: ",
       };
       yield {
         id: "mock_01",
-        model: "llama3.2:latest",
+        model: "qwen2.5-coder:7b",
         content: msgs[msgs.length - 1].content,
         usage: {
           promptTokens: 10,
@@ -121,13 +110,13 @@ async function runAiTests() {
   );
   assert.strictEqual(mockResponse.usage?.reasoningTokens, 5);
   console.log(
-    "✓ Pluggable provider executed successfully with reasoning tokens."
+    "✓ Local provider executed successfully with reasoning tokens."
   );
 
-  // Restore OpenRouter provider
-  aiService.setProvider(openRouterService as unknown as IAiProvider);
-  assert.strictEqual(aiService.getStatus().provider, "openrouter");
-  console.log("✓ OpenRouter provider restored.");
+  // Restore default Ollama provider
+  aiService.setProvider(ollamaService as unknown as IAiProvider);
+  assert.strictEqual(aiService.getStatus().provider, "ollama");
+  console.log("✓ Default Ollama provider restored.");
 
   // 4. HTTP API Endpoints Verification
   console.log(
@@ -145,13 +134,16 @@ async function runAiTests() {
       `http://localhost:${testPort}/api/v1/ai/status`
     );
     assert.strictEqual(statusRes.status, 200);
-    const statusData = await statusRes.json();
-    assert.strictEqual(statusData.provider, "openrouter");
-    assert.strictEqual(statusData.configured, false);
-    assert.strictEqual(
-      statusData.model,
-      "nvidia/nemotron-3-ultra-550b-a55b:free"
-    );
+    const statusData = (await statusRes.json()) as {
+      provider: string;
+      configured: boolean;
+      model: string;
+      availableProviders: string[];
+    };
+    assert.strictEqual(statusData.provider, "ollama");
+    assert.strictEqual(statusData.configured, true);
+    assert.strictEqual(statusData.model, "qwen2.5-coder:7b");
+    assert.deepStrictEqual(statusData.availableProviders, ["ollama"]);
     console.log(
       "✓ GET /api/v1/ai/status returns 200 with configuration status."
     );
@@ -166,28 +158,10 @@ async function runAiTests() {
       }
     );
     assert.strictEqual(badReqRes.status, 400);
-    const badReqData = await badReqRes.json();
+    const badReqData = (await badReqRes.json()) as { error: string };
     assert.strictEqual(badReqData.error, "Bad Request");
     console.log(
       "✓ POST /api/v1/ai/chat invalid payload returns 400 Bad Request."
-    );
-
-    // 4c. POST /api/v1/ai/chat with message (unconfigured) -> 503
-    const unconfRes = await fetch(
-      `http://localhost:${testPort}/api/v1/ai/chat`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: "How many r's are in strawberry?" }),
-      }
-    );
-    assert.strictEqual(unconfRes.status, 503);
-    const unconfData = await unconfRes.json();
-    assert.strictEqual(unconfData.error, "Configuration Error");
-    assert.strictEqual(unconfData.code, "OPENROUTER_NOT_CONFIGURED");
-    assert.strictEqual(unconfData.message.includes("OPENROUTER_API_KEY"), true);
-    console.log(
-      "✓ POST /api/v1/ai/chat without key returns 503 Configuration Error."
     );
   } finally {
     await new Promise<void>((resolve) => server.close(() => resolve()));

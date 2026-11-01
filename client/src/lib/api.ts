@@ -148,6 +148,9 @@ async function request<T>(
       signal: options.signal ?? AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
   } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw err;
+    }
     if (err instanceof DOMException && err.name === "TimeoutError") {
       throw new Error(
         "The Dev Trace server took too long to respond. Please try again."
@@ -263,8 +266,8 @@ export const api = {
       { method: "POST", body: JSON.stringify({ repositoryUrl }) }
     ),
 
-  getProjects: async (): Promise<{ projects: ProjectDto[] }> => {
-    return request<{ projects: ProjectDto[] }>("/api/projects");
+  getProjects: async (options?: RequestInit): Promise<{ projects: ProjectDto[] }> => {
+    return request<{ projects: ProjectDto[] }>("/api/projects", options);
   },
 
   getProjectBySlug: async (
