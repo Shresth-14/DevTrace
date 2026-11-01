@@ -1,8 +1,10 @@
-import { describe, it, afterEach } from "node:test";
+import { describe, it, afterEach, before, after } from "node:test";
 import assert from "node:assert/strict";
 import request from "supertest";
 import "../src/tests/setup-env";
 import { createApp } from "../src/app";
+import { prisma } from "../src/database";
+import { signSessionToken } from "../src/utils/jwt";
 import { OllamaService } from "../src/modules/ai/ollama.service";
 import { aiService } from "../src/modules/ai/ai.service";
 import {
@@ -370,6 +372,28 @@ describe("AiService Provider Configuration", () => {
 });
 
 describe("AI API Routes with Ollama", () => {
+  // The AI routes need a signed-in user; give requireAuth one without touching the database.
+  const originalFindUnique = prisma.user.findUnique;
+  const token = `Bearer ${signSessionToken({
+    userId: "test-user",
+    githubId: "1",
+    githubUsername: "tester",
+  })}`;
+  const authed = () => ({
+    get: (path: string) => request(app).get(path).set("Authorization", token),
+    post: (path: string) => request(app).post(path).set("Authorization", token),
+  });
+
+  before(() => {
+    Object.assign(prisma.user, {
+      findUnique: async () => ({ id: "test-user", githubUsername: "tester", token: null }),
+    });
+  });
+  after(() => {
+    Object.assign(prisma.user, { findUnique: originalFindUnique });
+  });
+
+
   const originalProvider = aiService.getActiveProvider();
 
   afterEach(() => {
@@ -378,7 +402,7 @@ describe("AI API Routes with Ollama", () => {
 
   it("GET /api/v1/ai/status returns current provider info", async () => {
     aiService.setProviderByName("ollama");
-    const res = await request(app).get("/api/v1/ai/status");
+    const res = await authed().get("/api/v1/ai/status");
 
     assert.equal(res.status, 200);
     assert.equal(res.body.provider, "ollama");
@@ -398,7 +422,7 @@ describe("AI API Routes with Ollama", () => {
     });
 
     aiService.setProvider(mockOllama);
-    const res = await request(app).get("/api/v1/ai/status?diagnostics=true");
+    const res = await authed().get("/api/v1/ai/status?diagnostics=true");
 
     assert.equal(res.status, 200);
     assert.equal(res.body.provider, "ollama");
@@ -407,7 +431,7 @@ describe("AI API Routes with Ollama", () => {
   });
 
   it("POST /api/v1/ai/chat returns 400 for bad request payloads", async () => {
-    const res = await request(app)
+    const res = await authed()
       .post("/api/v1/ai/chat")
       .send({ invalid: "payload" });
 
@@ -427,7 +451,7 @@ describe("AI API Routes with Ollama", () => {
 
     aiService.setProvider(mockOllama);
 
-    const res = await request(app)
+    const res = await authed()
       .post("/api/v1/ai/chat")
       .send({ message: "Hello" });
 
@@ -445,7 +469,7 @@ describe("AI API Routes with Ollama", () => {
 
     aiService.setProvider(mockOllama);
 
-    const res = await request(app)
+    const res = await authed()
       .post("/api/v1/ai/chat")
       .send({ message: "Hello" });
 
@@ -474,7 +498,7 @@ describe("AI API Routes with Ollama", () => {
 
     aiService.setProvider(mockOllama);
 
-    const res = await request(app)
+    const res = await authed()
       .post("/api/v1/ai/chat")
       .send({ message: "Hello" });
 
