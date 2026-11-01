@@ -80,6 +80,16 @@ describe("repository hygiene", { skip }, () => {
     assert.deepEqual(bad, []);
   });
 
+  it("tracks no files whose purpose is to instruct AI agents", () => {
+    // Tools such as `next dev` can generate these automatically; they are git-ignored.
+    const bad = (files ?? []).filter((f) =>
+      /(^|\/)(agents|claude|gemini)\.md$/i.test(f) ||
+      /(^|\/)(\.cursorrules|\.windsurfrules|copilot-instructions\.md)$/i.test(f) ||
+      /(^|\/)\.(cursor|claude)\//.test(f)
+    );
+    assert.deepEqual(bad, []);
+  });
+
   it("contains no key- or token-shaped strings", () => {
     assert.deepEqual(findings(SECRET_PATTERNS), []);
   });
