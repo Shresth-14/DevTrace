@@ -8,6 +8,8 @@ import {
   ChatMessage,
 } from "../modules/ai/ai.types";
 import { createApp } from "../app";
+import { prisma } from "../database";
+import { signSessionToken } from "../utils/jwt";
 import { Server } from "http";
 
 async function runAiTests() {
@@ -124,14 +126,29 @@ async function runAiTests() {
   );
   const app = createApp();
   const testPort = 5098;
+  // The AI routes need a signed-in user; give requireAuth a user without touching the database.
+  const originalFindUnique = prisma.user.findUnique;
+  Object.assign(prisma.user, {
+    findUnique: async () => ({ id: "test-user", githubUsername: "tester", token: null }),
+  });
+  const auth = {
+    Authorization: `Bearer ${signSessionToken({
+      userId: "test-user",
+      githubId: "1",
+      githubUsername: "tester",
+    })}`,
+  };
   const server: Server = await new Promise((resolve) => {
     const s = app.listen(testPort, () => resolve(s));
   });
 
   try {
     // 4a. GET /api/v1/ai/status
+    const anonRes = await fetch(`http://localhost:${testPort}/api/v1/ai/status`);
+    assert.strictEqual(anonRes.status, 401, "AI status requires sign-in");
     const statusRes = await fetch(
-      `http://localhost:${testPort}/api/v1/ai/status`
+      `http://localhost:${testPort}/api/v1/ai/status`,
+      { headers: auth }
     );
     assert.strictEqual(statusRes.status, 200);
     const statusData = (await statusRes.json()) as {
@@ -153,7 +170,7 @@ async function runAiTests() {
       `http://localhost:${testPort}/api/v1/ai/chat`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...auth },
         body: JSON.stringify({}),
       }
     );
@@ -164,6 +181,7 @@ async function runAiTests() {
       "✓ POST /api/v1/ai/chat invalid payload returns 400 Bad Request."
     );
   } finally {
+    Object.assign(prisma.user, { findUnique: originalFindUnique });
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 
